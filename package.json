@@ -1,0 +1,23 @@
+{
+  "name": "genshin-dashboard",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "node --watch server/index.js",
+    "build": "vite build",
+    "start": "node --max-old-space-size=48 --optimize-for-size server/index.js",
+    "sync": "node scripts/sync-catalog.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@lucide/vue": "^1.48.0",
+    "hono": "^4.13.9",
+    "vue": "^3.5.43"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.9",
+    "vite": "^8.3.1"
+  }
+}

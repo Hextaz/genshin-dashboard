@@ -171,7 +171,7 @@ app.delete('/api/teams/:id', (c) => {
 // 4. PLANIFICATEUR DE MONTÉE (UPGRADE PLANNER)
 // ==========================================
 app.get('/api/planner', (c) => {
-  const items = db.prepare('SELECT * FROM upgrade_planner ORDER BY CASE tier WHEN "S" THEN 1 WHEN "A" THEN 2 WHEN "B" THEN 3 ELSE 4 END, sort_order ASC, created_at DESC').all();
+  const items = db.prepare("SELECT * FROM upgrade_planner ORDER BY CASE tier WHEN 'S' THEN 1 WHEN 'A' THEN 2 WHEN 'B' THEN 3 ELSE 4 END, sort_order ASC, created_at DESC").all();
   return c.json(items);
 });
 

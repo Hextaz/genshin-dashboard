@@ -6,7 +6,13 @@ import TeamsView from './views/TeamsView.vue';
 import PlannerView from './views/PlannerView.vue';
 import EndgameView from './views/EndgameView.vue';
 import WishlistView from './views/WishlistView.vue';
-import { fetchCatalog, fetchTeams, fetchLoadouts } from './api.js';
+import {
+  fetchCatalog,
+  fetchTeams,
+  fetchLoadouts,
+  fetchOwnership,
+  updateOwnership
+} from './api.js';
 
 const currentView = ref('characters');
 const loading = ref(true);
@@ -16,13 +22,15 @@ const weapons = ref([]);
 const reliquaries = ref([]);
 const teams = ref([]);
 const loadouts = ref([]);
+const ownership = ref({});
 
 async function loadAllData() {
   try {
-    const [allCatalog, loadedTeams, loadedLoadouts] = await Promise.all([
+    const [allCatalog, loadedTeams, loadedLoadouts, loadedOwnership] = await Promise.all([
       fetchCatalog(),
       fetchTeams(),
-      fetchLoadouts()
+      fetchLoadouts(),
+      fetchOwnership()
     ]);
 
     characters.value = allCatalog.filter(i => i.category === 'character');
@@ -30,6 +38,7 @@ async function loadAllData() {
     reliquaries.value = allCatalog.filter(i => i.category === 'reliquary');
     teams.value = loadedTeams;
     loadouts.value = loadedLoadouts;
+    ownership.value = loadedOwnership || {};
   } catch (err) {
     console.error('Erreur chargement données:', err);
   } finally {
@@ -45,6 +54,21 @@ async function refreshLoadouts() {
   loadouts.value = await fetchLoadouts();
 }
 
+async function toggleOwnership(charId) {
+  const current = ownership.value[charId]?.is_owned ? 1 : 0;
+  const next = current ? 0 : 1;
+  // Mise à jour optimiste immédiate dans l'UI
+  ownership.value = {
+    ...ownership.value,
+    [charId]: { ...ownership.value[charId], is_owned: next }
+  };
+  try {
+    await updateOwnership(charId, { is_owned: next });
+  } catch (err) {
+    console.error('Erreur mise à jour ownership:', err);
+  }
+}
+
 onMounted(() => {
   loadAllData();
 });
@@ -52,7 +76,11 @@ onMounted(() => {
 
 <template>
   <div class="app-root">
-    <Navbar :current-view="currentView" @change-view="(v) => currentView = v" />
+    <Navbar
+      :current-view="currentView"
+      :counts="{ characters: characters.length, teams: teams.length, loadouts: loadouts.length }"
+      @change-view="(v) => currentView = v"
+    />
 
     <main class="main-content">
       <div v-if="loading" class="loading-state">
@@ -68,7 +96,9 @@ onMounted(() => {
           :weapons="weapons"
           :reliquaries="reliquaries"
           :loadouts="loadouts"
+          :ownership="ownership"
           @refresh-loadouts="refreshLoadouts"
+          @toggle-ownership="toggleOwnership"
         />
 
         <!-- Vue 2: Presets d'Équipes -->
@@ -87,6 +117,7 @@ onMounted(() => {
           v-show="currentView === 'planner'"
           :characters="characters"
           :weapons="weapons"
+          :reliquaries="reliquaries"
         />
 
         <!-- Vue 4: Endgame (Abysses & Carnage) -->
@@ -95,6 +126,8 @@ onMounted(() => {
           :characters="characters"
           :teams="teams"
           :loadouts="loadouts"
+          :weapons="weapons"
+          :reliquaries="reliquaries"
         />
 
         <!-- Vue 5: Roadmap Vœux -->
@@ -124,10 +157,10 @@ onMounted(() => {
 
 .main-content {
   flex: 1;
-  max-width: 1400px;
+  max-width: 1440px;
   width: 100%;
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem 2.5rem;
 }
 
 .loading-state {
@@ -144,7 +177,7 @@ onMounted(() => {
   width: 40px;
   height: 40px;
   border: 3px solid var(--border-subtle);
-  border-top-color: var(--color-hydro);
+  border-top-color: var(--color-anemo);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -163,7 +196,7 @@ onMounted(() => {
 }
 
 .footer-container {
-  max-width: 1400px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 0 1.5rem;
   display: flex;

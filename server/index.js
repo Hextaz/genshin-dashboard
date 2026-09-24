@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import db from './db.js';
+import { syncCatalog } from '../scripts/sync-catalog.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '../dist');
@@ -15,10 +16,57 @@ const app = new Hono();
 
 app.use('*', cors());
 
+// Détection automatique et mise à jour transparente de l'API Yatta en arrière-plan
+async function checkAutoUpdate() {
+  try {
+    const lastCheckRow = db.prepare('SELECT value FROM app_metadata WHERE key = ?').get('last_catalog_check');
+    const now = Date.now();
+    // Cooldown de 6h pour ne pas surcharger Yatta ni consommer inutilement de requêtes
+    if (lastCheckRow && now - Number(lastCheckRow.value) < 6 * 3600 * 1000) {
+      return;
+    }
+    db.prepare('INSERT OR REPLACE INTO app_metadata (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)').run('last_catalog_check', String(now));
+
+    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+    const vRes = await fetch('https://gi.yatta.moe/api/v2/static/version', { headers: { 'User-Agent': UA } });
+    if (!vRes.ok) return;
+    const vData = await vRes.json();
+    const remoteVh = vData.data?.vh;
+    const storedVh = db.prepare('SELECT value FROM app_metadata WHERE key = ?').get('catalog_vh')?.value;
+
+    const count = db.prepare('SELECT COUNT(*) as c FROM catalog_items').get()?.c || 0;
+    if (count === 0 || (remoteVh && remoteVh !== storedVh)) {
+      console.log(`[Auto-Update] Nouvelle version Genshin détectée (remote: ${remoteVh}, locale: ${storedVh || 'none'}) -> Synchro en arrière-plan...`);
+      syncCatalog().catch(err => console.error('[Auto-Update Error]', err));
+    }
+  } catch (err) {
+    console.warn('[Auto-Update Warning] Vérification Yatta impossible:', err.message);
+  }
+}
+
+// Vérification initiale au démarrage
+checkAutoUpdate();
+
+// Endpoint de santé pour monitoring (Uptime Kuma)
+app.get('/api/health', (c) => {
+  const mem = process.memoryUsage();
+  return c.json({
+    status: 'ok',
+    uptime: Math.round(process.uptime()),
+    memory: {
+      rss_mb: +(mem.rss / 1024 / 1024).toFixed(2),
+      heap_used_mb: +(mem.heapUsed / 1024 / 1024).toFixed(2)
+    }
+  });
+});
+
 // ==========================================
 // 1. CATALOGUE DU JEU
 // ==========================================
 app.get('/api/catalog', (c) => {
+  // Lancement asynchrone non-bloquant du contrôle d'auto-update
+  checkAutoUpdate();
+
   const category = c.req.query('category');
   if (category) {
     const stmt = db.prepare('SELECT id, category, name, element, rarity, weapon_type, icon FROM catalog_items WHERE category = ? ORDER BY rarity DESC, name ASC');
@@ -238,7 +286,27 @@ app.get('/api/endgame/:mode', (c) => {
   const mode = c.req.param('mode');
   const row = db.prepare('SELECT * FROM endgame_setups WHERE id = ?').get(mode);
   if (!row) return c.json({ mode, data: null });
-  return c.json({ mode: row.mode, data: JSON.parse(row.data_json), updated_at: row.updated_at });
+  const parsed = JSON.parse(row.data_json);
+
+  if (mode === 'abyss_meta') {
+    const items = parsed.items || parsed;
+    const lastKey = Object.keys(items).pop();
+    const floorList = items[lastKey]?.entrance?.floorList || [];
+    const floor11 = floorList.length >= 2 ? floorList[floorList.length - 2] : null;
+    const floor12 = floorList.length >= 1 ? floorList[floorList.length - 1] : null;
+    return c.json({
+      mode: 'abyss_meta',
+      data: {
+        raw: parsed,
+        floor11,
+        floor12,
+        blessing: items[lastKey]?.blessing || {}
+      },
+      updated_at: row.updated_at
+    });
+  }
+
+  return c.json({ mode: row.mode, data: parsed, updated_at: row.updated_at });
 });
 
 app.post('/api/endgame/:mode', async (c) => {
@@ -266,8 +334,8 @@ app.post('/api/wishlist', async (c) => {
   const maxOrder = db.prepare('SELECT MAX(priority_order) as m FROM wish_roadmap').get()?.m || 0;
   
   const stmt = db.prepare(`
-    INSERT INTO wish_roadmap (id, item_type, item_id, name, icon, constellation_level, priority_order, status, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO wish_roadmap (id, item_type, item_id, name, icon, constellation_level, priority_order, priority_tier, status, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(
     id,
@@ -277,6 +345,7 @@ app.post('/api/wishlist', async (c) => {
     body.icon || '',
     body.constellation_level ? Number(body.constellation_level) : null,
     maxOrder + 1,
+    body.priority_tier || 'S',
     body.status || 'active',
     body.notes || ''
   );
@@ -300,7 +369,7 @@ app.patch('/api/wishlist/:id', async (c) => {
   const fields = [];
   const values = [];
   for (const [key, val] of Object.entries(body)) {
-    if (['status', 'notes', 'priority_order'].includes(key)) {
+    if (['status', 'notes', 'priority_order', 'priority_tier'].includes(key)) {
       fields.push(`${key} = ?`);
       values.push(val);
     }
@@ -319,7 +388,35 @@ app.delete('/api/wishlist/:id', (c) => {
 });
 
 // ==========================================
-// 7. FICHIERS STATIQUES DU FRONTEND SPA
+// 7. PERSONNAGES POSSÉDÉS (OWNERSHIP)
+// ==========================================
+app.get('/api/ownership', (c) => {
+  const rows = db.prepare('SELECT character_id, is_owned, constellation, notes FROM character_ownership').all();
+  const map = {};
+  for (const r of rows) {
+    map[r.character_id] = r;
+  }
+  return c.json(map);
+});
+
+app.post('/api/ownership/:id', async (c) => {
+  const charId = Number(c.req.param('id'));
+  const body = await c.req.json().catch(() => ({}));
+  const current = db.prepare('SELECT is_owned, constellation FROM character_ownership WHERE character_id = ?').get(charId);
+  const newOwned = body.is_owned !== undefined ? (body.is_owned ? 1 : 0) : (current?.is_owned ? 0 : 1);
+  const constellation = body.constellation !== undefined ? Number(body.constellation) : (current?.constellation || 0);
+
+  db.prepare(`
+    INSERT INTO character_ownership (character_id, is_owned, constellation, notes, updated_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(character_id) DO UPDATE SET is_owned = excluded.is_owned, constellation = excluded.constellation, updated_at = CURRENT_TIMESTAMP
+  `).run(charId, newOwned, constellation, body.notes || '');
+
+  return c.json({ success: true, character_id: charId, is_owned: newOwned, constellation });
+});
+
+// ==========================================
+// 8. FICHIERS STATIQUES DU FRONTEND SPA
 // ==========================================
 if (existsSync(distDir)) {
   app.use('/*', serveStatic({ root: './dist' }));

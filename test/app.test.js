@@ -96,4 +96,102 @@ describe('Genshin Dashboard - Tests du Domaine & SQLite', () => {
     const conflict = invalidTeam2.some(id => team1Set.has(id));
     assert.equal(conflict, true, 'Le doublon doit être détecté immédiatement');
   });
+
+  it('devrait enregistrer et basculer le statut possédé d\'un personnage (⭐)', () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS character_ownership (
+        character_id INTEGER PRIMARY KEY,
+        is_owned INTEGER DEFAULT 0,
+        constellation INTEGER DEFAULT 0,
+        notes TEXT
+      );
+    `);
+
+    const upsert = db.prepare(`
+      INSERT INTO character_ownership (character_id, is_owned, constellation, notes)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(character_id) DO UPDATE SET is_owned = excluded.is_owned
+    `);
+
+    // Marquer Raiden (10000052) comme possédée
+    upsert.run(10000052, 1, 2, 'C2 Raiden');
+    let row = db.prepare('SELECT * FROM character_ownership WHERE character_id = ?').get(10000052);
+    assert.equal(row.is_owned, 1);
+    assert.equal(row.constellation, 2);
+
+    // Basculer à non possédé
+    upsert.run(10000052, 0, 0, '');
+    row = db.prepare('SELECT * FROM character_ownership WHERE character_id = ?').get(10000052);
+    assert.equal(row.is_owned, 0);
+  });
+
+  it('devrait calculer correctement la progression des checklists du planificateur', () => {
+    // Calcul de complétion : 3 sous-tâches pour un personnage
+    const item = {
+      target_type: 'character',
+      is_level_done: 1,
+      is_talents_done: 1,
+      is_artifacts_done: 0
+    };
+    const done = item.is_level_done + item.is_talents_done + item.is_artifacts_done;
+    const total = 3;
+    const pct = Math.round((done / total) * 100);
+    assert.equal(done, 2);
+    assert.equal(pct, 67);
+  });
+
+  it('devrait valider le réordonnancement de la roadmap de vœux', () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS wishlist (
+        id TEXT PRIMARY KEY,
+        item_type TEXT NOT NULL,
+        name TEXT NOT NULL,
+        sort_order INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'pending'
+      );
+    `);
+
+    const insert = db.prepare('INSERT INTO wishlist (id, item_type, name, sort_order) VALUES (?, ?, ?, ?)');
+    insert.run('w1', 'character', 'Skirk', 0);
+    insert.run('w2', 'weapon', 'Arme signature', 1);
+    insert.run('w3', 'constellation', 'Furina C1', 2);
+
+    // Inverser l'ordre de w1 et w2
+    const update = db.prepare('UPDATE wishlist SET sort_order = ? WHERE id = ?');
+    update.run(1, 'w1');
+    update.run(0, 'w2');
+
+    const ordered = db.prepare('SELECT id, name FROM wishlist ORDER BY sort_order ASC').all();
+    assert.equal(ordered[0].id, 'w2');
+    assert.equal(ordered[1].id, 'w1');
+    assert.equal(ordered[2].id, 'w3');
+  });
+
+  it('devrait supporter les Tiers de priorité (S, A, B) dans la roadmap de vœux', () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS test_wish_roadmap (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        priority_order INTEGER NOT NULL,
+        priority_tier TEXT DEFAULT 'S',
+        status TEXT DEFAULT 'active'
+      );
+    `);
+
+    const insert = db.prepare('INSERT INTO test_wish_roadmap (id, name, priority_order, priority_tier) VALUES (?, ?, ?, ?)');
+    insert.run('w_s', 'Mavuika', 1, 'S');
+    insert.run('w_a', 'Citlali', 2, 'A');
+    insert.run('w_b', 'Xilonen C1', 3, 'B');
+
+    // Récupération par tier S
+    const tierS = db.prepare("SELECT * FROM test_wish_roadmap WHERE priority_tier = 'S'").all();
+    assert.equal(tierS.length, 1);
+    assert.equal(tierS[0].name, 'Mavuika');
+
+    // Mise à jour de tier
+    db.prepare("UPDATE test_wish_roadmap SET priority_tier = ? WHERE id = ?").run('S', 'w_a');
+    const updatedTierS = db.prepare("SELECT * FROM test_wish_roadmap WHERE priority_tier = 'S'").all();
+    assert.equal(updatedTierS.length, 2);
+  });
 });
+

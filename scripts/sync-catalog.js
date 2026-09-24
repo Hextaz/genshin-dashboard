@@ -87,11 +87,31 @@ async function sync() {
     towerStmt.run('abyss_meta', 'abyss_meta', JSON.stringify(tower));
     console.log(`✓ Données officielles des Abysses sauvegardées.`);
 
+    // 5. Version Hash
+    try {
+      const vRes = await fetch('https://gi.yatta.moe/api/v2/static/version', { headers: { 'User-Agent': UA } });
+      if (vRes.ok) {
+        const vData = await vRes.json();
+        const vh = vData.data?.vh || '';
+        db.prepare('INSERT OR REPLACE INTO app_metadata (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)').run('catalog_vh', vh);
+        db.prepare('INSERT OR REPLACE INTO app_metadata (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)').run('last_sync_time', new Date().toISOString());
+        console.log(`✓ Hash version Yatta sauvegardé : ${vh}`);
+      }
+    } catch (e) {
+      console.warn('Impossible de sauvegarder la version Yatta:', e.message);
+    }
+
     console.log('--- Synchronisation terminée avec succès ! ---');
+    return true;
   } catch (err) {
     console.error('Erreur lors de la synchronisation:', err);
-    process.exit(1);
+    throw err;
   }
 }
 
-sync();
+export { sync as syncCatalog };
+
+// Exécution directe via CLI
+if (process.argv[1] && process.argv[1].endsWith('sync-catalog.js')) {
+  sync().catch(() => process.exit(1));
+}

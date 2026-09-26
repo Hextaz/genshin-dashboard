@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { getIconUrl, WEAPON_LABELS } from '../api.js';
+import { getIconUrl, WEAPON_LABELS, getSignatureWeaponId } from '../api.js';
 
 const props = defineProps({
   weapons: {
@@ -14,6 +14,10 @@ const props = defineProps({
   currentWeaponId: {
     type: [Number, String],
     default: null
+  },
+  character: {
+    type: Object,
+    default: null
   }
 });
 
@@ -22,12 +26,31 @@ const emit = defineEmits(['select', 'close']);
 const searchQuery = ref('');
 const selectedRarity = ref('ALL');
 
+const signatureWeaponId = computed(() => {
+  return props.character ? getSignatureWeaponId(props.character) : null;
+});
+
 const compatibleWeapons = computed(() => {
-  return props.weapons.filter(w => {
+  const filtered = props.weapons.filter(w => {
     if (props.weaponType && w.weapon_type !== props.weaponType) return false;
     if (selectedRarity.value !== 'ALL' && w.rarity !== Number(selectedRarity.value)) return false;
     if (searchQuery.value.trim() && !w.name.toLowerCase().includes(searchQuery.value.toLowerCase())) return false;
     return true;
+  });
+
+  const sigId = signatureWeaponId.value;
+  return filtered.sort((a, b) => {
+    const rawA = Number(a.id.replace('weapon_', ''));
+    const rawB = Number(b.id.replace('weapon_', ''));
+    // 1. Arme signature officielle en tout premier
+    if (sigId) {
+      if (rawA === sigId) return -1;
+      if (rawB === sigId) return 1;
+    }
+    // 2. Rareté décroissante (5★ > 4★ > 3★)
+    if (b.rarity !== a.rarity) return b.rarity - a.rarity;
+    // 3. Ordre alphabétique français
+    return a.name.localeCompare(b.name, 'fr');
   });
 });
 
@@ -38,63 +61,97 @@ function pickWeapon(w) {
 </script>
 
 <template>
-  <dialog open class="picker-dialog" @click.self="$emit('close')">
-    <div class="picker-content">
-      <div class="picker-header">
-        <div>
-          <h3 class="picker-title">Sélectionner une arme</h3>
-          <span class="picker-sub">
-            {{ WEAPON_LABELS[weaponType] || 'Toutes les armes' }} ({{ compatibleWeapons.length }} disponibles)
-          </span>
-        </div>
-        <button type="button" class="btn-close" @click="$emit('close')">✕</button>
-      </div>
-
-      <!-- Barre de recherche et filtres de rareté -->
-      <div class="picker-filters">
-        <input
-          v-model="searchQuery"
-          type="search"
-          placeholder="Rechercher une arme..."
-          class="picker-search"
-        />
-        <div class="rarity-pills">
-          <button
-            v-for="r in ['ALL', '5', '4', '3']"
-            :key="r"
-            type="button"
-            :class="['rarity-pill', { active: selectedRarity === r }]"
-            @click="selectedRarity = r"
-          >
-            {{ r === 'ALL' ? 'Toutes' : `${r}★` }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Grille des armes -->
-      <div class="weapons-grid">
-        <button
-          v-for="w in compatibleWeapons"
-          :key="w.id"
-          type="button"
-          :class="['weapon-card', { selected: currentWeaponId === Number(w.id.replace('weapon_', '')) }]"
-          @click="pickWeapon(w)"
-        >
-          <div :class="['weapon-img-box', `rarity-${w.rarity}`]">
-            <img :src="getIconUrl(w.icon)" :alt="w.name" class="weapon-img" loading="lazy" />
-            <span class="weapon-star">{{ w.rarity }}★</span>
+  <Teleport to="body">
+    <div class="modal-overlay" @click.self="$emit('close')">
+      <div class="picker-dialog" role="dialog" aria-modal="true">
+        <div class="picker-content">
+          <div class="picker-header">
+            <div>
+              <h3 class="picker-title">Sélectionner une arme</h3>
+              <span class="picker-sub">
+                {{ WEAPON_LABELS[weaponType] || 'Toutes les armes' }} ({{ compatibleWeapons.length }} disponibles)
+              </span>
+            </div>
+            <button type="button" class="btn-close" @click="$emit('close')">✕</button>
           </div>
-          <span class="weapon-name">{{ w.name }}</span>
-        </button>
+
+          <!-- Barre de recherche et filtres de rareté -->
+          <div class="picker-filters">
+            <input
+              v-model="searchQuery"
+              type="search"
+              placeholder="Rechercher une arme..."
+              class="picker-search"
+            />
+            <div class="rarity-pills">
+              <button
+                v-for="r in ['ALL', '5', '4', '3']"
+                :key="r"
+                type="button"
+                :class="['rarity-pill', { active: selectedRarity === r }]"
+                @click="selectedRarity = r"
+              >
+                {{ r === 'ALL' ? 'Toutes' : `${r}★` }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Grille des armes -->
+          <div class="weapons-grid">
+            <button
+              v-for="w in compatibleWeapons"
+              :key="w.id"
+              type="button"
+              :class="[
+                'weapon-card',
+                {
+                  selected: currentWeaponId === Number(w.id.replace('weapon_', '')),
+                  'is-signature': signatureWeaponId === Number(w.id.replace('weapon_', ''))
+                }
+              ]"
+              @click="pickWeapon(w)"
+            >
+              <div :class="['weapon-img-box', `rarity-${w.rarity}`]">
+                <img :src="getIconUrl(w.icon)" :alt="w.name" class="weapon-img" loading="lazy" />
+                <span class="weapon-star">{{ w.rarity }}★</span>
+                <span
+                  v-if="signatureWeaponId === Number(w.id.replace('weapon_', ''))"
+                  class="signature-badge"
+                  title="Arme signature officielle"
+                >
+                  Signature
+                </span>
+              </div>
+              <span class="weapon-name">{{ w.name }}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-  </dialog>
+  </Teleport>
 </template>
 
 <style scoped>
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
 .picker-dialog {
   width: 680px;
   max-width: 95vw;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
 }
 
 .picker-content {
@@ -198,6 +255,28 @@ function pickWeapon(w) {
 .weapon-card.selected {
   border-color: var(--color-anemo);
   box-shadow: 0 0 12px rgba(51, 230, 184, 0.3);
+}
+
+.weapon-card.is-signature {
+  border-color: #F3C552;
+  background: rgba(243, 197, 82, 0.06);
+  box-shadow: 0 0 12px rgba(243, 197, 82, 0.2);
+}
+
+.signature-badge {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  padding: 1px 4px;
+  background: linear-gradient(135deg, #F3C552 0%, #D49E24 100%);
+  color: #0B0D12;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  border-radius: 3px;
+  text-transform: uppercase;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+  z-index: 2;
 }
 
 .weapon-img-box {

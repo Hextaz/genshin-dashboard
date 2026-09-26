@@ -76,8 +76,11 @@ db.exec(`
     tier TEXT DEFAULT 'S',           -- 'S', 'A', 'B'
     current_level INTEGER DEFAULT 1,
     target_level INTEGER DEFAULT 90,
+    talent_normal_current INTEGER DEFAULT 1,
     talent_normal_target INTEGER DEFAULT 1,
+    talent_skill_current INTEGER DEFAULT 1,
     talent_skill_target INTEGER DEFAULT 1,
+    talent_burst_current INTEGER DEFAULT 1,
     talent_burst_target INTEGER DEFAULT 1,
     weapon_target_level INTEGER DEFAULT 90,
     artifact_action TEXT DEFAULT 'none', -- 'none', 'set_change', 'upgrade_levels', 'substat_farm', 'completed'
@@ -127,6 +130,13 @@ db.exec(`
     value TEXT NOT NULL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS character_signatures (
+    character_id INTEGER PRIMARY KEY,
+    weapon_id INTEGER NOT NULL,
+    source TEXT DEFAULT 'seed', -- 'seed', 'auto_detected', 'manual'
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Migrations sécurisées pour bases existantes
@@ -135,5 +145,17 @@ try {
 } catch (e) {
   // Colonne déjà présente
 }
+
+try {
+  db.exec("ALTER TABLE upgrade_planner ADD COLUMN talent_normal_current INTEGER DEFAULT 1");
+} catch (e) {}
+
+try {
+  db.exec("ALTER TABLE upgrade_planner ADD COLUMN talent_skill_current INTEGER DEFAULT 1");
+} catch (e) {}
+
+try {
+  db.exec("ALTER TABLE upgrade_planner ADD COLUMN talent_burst_current INTEGER DEFAULT 1");
+} catch (e) {}
 
 export default db;

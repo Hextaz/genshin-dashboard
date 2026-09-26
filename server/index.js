@@ -88,6 +88,33 @@ app.get('/api/catalog/:id', (c) => {
   });
 });
 
+// Endpoint des armes signatures (chargé depuis SQLite)
+app.get('/api/signature_weapons', (c) => {
+  const rows = db.prepare('SELECT character_id, weapon_id FROM character_signatures').all();
+  const map = {};
+  for (const r of rows) {
+    map[r.character_id] = r.weapon_id;
+  }
+  return c.json(map);
+});
+
+function normalizeMainStats(val) {
+  if (!val) return null;
+  if (typeof val === 'object') return JSON.stringify(val);
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      if (typeof parsed === 'string') {
+        return parsed;
+      }
+      return typeof parsed === 'object' ? JSON.stringify(parsed) : val;
+    } catch {
+      return val;
+    }
+  }
+  return null;
+}
+
 // ==========================================
 // 2. LOADOUTS DE PERSONNAGES
 // ==========================================
@@ -117,7 +144,7 @@ app.post('/api/loadouts', async (c) => {
     Number(body.weapon_refinement || 1),
     body.artifact_set_1_id ? Number(body.artifact_set_1_id) : null,
     body.artifact_set_2_id ? Number(body.artifact_set_2_id) : null,
-    body.main_stats ? JSON.stringify(body.main_stats) : null,
+    normalizeMainStats(body.main_stats),
     body.notes || ''
   );
   return c.json({ success: true, id }, 201);
@@ -137,7 +164,7 @@ app.put('/api/loadouts/:id', async (c) => {
     Number(body.weapon_refinement || 1),
     body.artifact_set_1_id ? Number(body.artifact_set_1_id) : null,
     body.artifact_set_2_id ? Number(body.artifact_set_2_id) : null,
-    body.main_stats ? JSON.stringify(body.main_stats) : null,
+    normalizeMainStats(body.main_stats),
     body.notes || '',
     id
   );
@@ -229,9 +256,13 @@ app.post('/api/planner', async (c) => {
   const stmt = db.prepare(`
     INSERT INTO upgrade_planner (
       id, target_type, character_id, weapon_id, name, icon, tier,
-      current_level, target_level, talent_normal_target, talent_skill_target, talent_burst_target,
-      weapon_target_level, artifact_action, artifact_notes
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      current_level, target_level,
+      talent_normal_current, talent_normal_target,
+      talent_skill_current, talent_skill_target,
+      talent_burst_current, talent_burst_target,
+      weapon_target_level, artifact_action, artifact_notes,
+      is_level_done, is_talents_done, is_weapon_done, is_artifacts_done, is_completed
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(
     id,
@@ -243,12 +274,20 @@ app.post('/api/planner', async (c) => {
     body.tier || 'S',
     Number(body.current_level || 1),
     Number(body.target_level || 90),
+    Number(body.talent_normal_current || 1),
     Number(body.talent_normal_target || 1),
+    Number(body.talent_skill_current || 1),
     Number(body.talent_skill_target || 8),
+    Number(body.talent_burst_current || 1),
     Number(body.talent_burst_target || 8),
     Number(body.weapon_target_level || 90),
     body.artifact_action || 'none',
-    body.artifact_notes || ''
+    body.artifact_notes || '',
+    Number(body.is_level_done || 0),
+    Number(body.is_talents_done || 0),
+    Number(body.is_weapon_done || 0),
+    Number(body.is_artifacts_done || 0),
+    Number(body.is_completed || 0)
   );
   return c.json({ success: true, id }, 201);
 });
@@ -260,7 +299,7 @@ app.patch('/api/planner/:id', async (c) => {
   const fields = [];
   const values = [];
   for (const [key, val] of Object.entries(body)) {
-    if (['tier', 'current_level', 'target_level', 'talent_normal_target', 'talent_skill_target', 'talent_burst_target', 'weapon_target_level', 'artifact_action', 'artifact_notes', 'is_level_done', 'is_talents_done', 'is_weapon_done', 'is_artifacts_done', 'is_completed'].includes(key)) {
+    if (['tier', 'current_level', 'target_level', 'talent_normal_current', 'talent_normal_target', 'talent_skill_current', 'talent_skill_target', 'talent_burst_current', 'talent_burst_target', 'weapon_target_level', 'artifact_action', 'artifact_notes', 'is_level_done', 'is_talents_done', 'is_weapon_done', 'is_artifacts_done', 'is_completed'].includes(key)) {
       fields.push(`${key} = ?`);
       values.push(val);
     }

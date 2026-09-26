@@ -30,48 +30,69 @@ function pickSet(r) {
 </script>
 
 <template>
-  <dialog open class="picker-dialog" @click.self="$emit('close')">
-    <div class="picker-content">
-      <div class="picker-header">
-        <div>
-          <h3 class="picker-title">Sélectionner un set d'artéfacts</h3>
-          <span class="picker-sub">{{ filteredSets.length }} sets disponibles</span>
-        </div>
-        <button type="button" class="btn-close" @click="$emit('close')">✕</button>
-      </div>
-
-      <div class="picker-filters">
-        <input
-          v-model="searchQuery"
-          type="search"
-          placeholder="Rechercher un set (ex: Emblème, Maréchaussée, Doré)..."
-          class="picker-search"
-        />
-      </div>
-
-      <!-- Grille des sets -->
-      <div class="sets-grid">
-        <button
-          v-for="r in filteredSets"
-          :key="r.id"
-          type="button"
-          :class="['set-card', { selected: currentSetId === Number(r.id.replace('relic_', '')) }]"
-          @click="pickSet(r)"
-        >
-          <div class="set-img-box">
-            <img :src="getIconUrl(r.icon)" :alt="r.name" class="set-img" loading="lazy" />
+  <Teleport to="body">
+    <div class="modal-overlay" @click.self="$emit('close')">
+      <div class="picker-dialog" role="dialog" aria-modal="true">
+        <div class="picker-content">
+          <div class="picker-header">
+            <div>
+              <h3 class="picker-title">Sélectionner un set d'artéfacts</h3>
+              <span class="picker-sub">{{ filteredSets.length }} sets disponibles</span>
+            </div>
+            <button type="button" class="btn-close" @click="$emit('close')">✕</button>
           </div>
-          <span class="set-name">{{ r.name }}</span>
-        </button>
+
+          <div class="picker-filters">
+            <input
+              v-model="searchQuery"
+              type="search"
+              placeholder="Rechercher un set (ex: Emblème, Maréchaussée, Doré)..."
+              class="picker-search"
+            />
+          </div>
+
+          <!-- Grille des sets -->
+          <div class="sets-grid">
+            <button
+              v-for="r in filteredSets"
+              :key="r.id"
+              type="button"
+              :class="['set-card', { selected: currentSetId === Number(r.id.replace('relic_', '')) }]"
+              @click="pickSet(r)"
+            >
+              <div class="set-img-box">
+                <img :src="getIconUrl(r.icon)" :alt="r.name" class="set-img" loading="lazy" />
+              </div>
+              <span class="set-name">{{ r.name }}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-  </dialog>
+  </Teleport>
 </template>
 
 <style scoped>
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
 .picker-dialog {
   width: 720px;
   max-width: 95vw;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
 }
 
 .picker-content {

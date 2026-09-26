@@ -13,7 +13,8 @@ import {
   fetchLoadouts,
   createLoadout,
   updateLoadout,
-  deleteLoadout
+  deleteLoadout,
+  getSignatureWeaponId
 } from '../api.js';
 import WeaponPickerModal from './WeaponPickerModal.vue';
 import ArtifactPickerModal from './ArtifactPickerModal.vue';
@@ -124,8 +125,10 @@ function selectBuild(index) {
 }
 
 function initNewBuild() {
-  // Sélectionner la première arme compatible par défaut si disponible
-  const compatWeapon = props.weapons.find(w => w.weapon_type === props.character.weapon_type);
+  // Sélectionner l'arme signature en priorité si disponible, sinon la 1ère compatible
+  const sigId = getSignatureWeaponId(props.character);
+  const sigWeapon = sigId ? props.weapons.find(w => Number(w.id.replace('weapon_', '')) === sigId) : null;
+  const compatWeapon = sigWeapon || props.weapons.find(w => w.weapon_type === props.character.weapon_type);
   const defaultWeaponId = compatWeapon ? Number(compatWeapon.id.replace('weapon_', '')) : null;
   const defaultRelicId = props.reliquaries.length > 0 ? Number(props.reliquaries[0].id.replace('relic_', '')) : null;
 
@@ -297,7 +300,7 @@ async function handleDelete() {
                   :alt="weaponsMap[formData.weapon_id].name"
                   class="weapon-img"
                 />
-                <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                   <path :d="WEAPON_SVGS[character.weapon_type]" />
                 </svg>
               </div>
@@ -306,7 +309,13 @@ async function handleDelete() {
                   {{ weaponsMap[formData.weapon_id]?.name || 'Choisir une arme...' }}
                 </div>
                 <div class="weapon-sub">
-                  {{ WEAPON_LABELS[character.weapon_type] || '' }} · Raffinement R{{ formData.weapon_refinement }}
+                  {{ WEAPON_LABELS[character.weapon_type] || '' }}
+                  <span
+                    v-if="formData.weapon_id === getSignatureWeaponId(character)"
+                    class="signature-indicator"
+                  >
+                    ★ Signature
+                  </span>
                 </div>
               </div>
               <button type="button" class="btn-change-item" @click.stop="showWeaponPicker = true">
@@ -408,26 +417,50 @@ async function handleDelete() {
         <!-- Section Statistiques Principales (3 cartes compactes élégantes) -->
         <div class="section-block">
           <span class="section-title">STATS PRINCIPALES CONSEILLÉES</span>
-          <div class="main-stats-grid">
-            <div class="stat-select-box">
-              <span class="stat-label">Sablier</span>
-              <select v-model="formData.main_stats.sands" class="stat-select">
-                <option v-for="stat in SANDS_STATS" :key="stat" :value="stat">{{ stat }}</option>
-              </select>
+          <div class="main-stats-list">
+            <div class="stat-select-row">
+              <div class="stat-slot-info">
+                <span class="stat-slot-icon">⏳</span>
+                <span class="stat-label">Sablier</span>
+              </div>
+              <div class="stat-select-wrapper">
+                <select v-model="formData.main_stats.sands" class="stat-select">
+                  <option v-for="stat in SANDS_STATS" :key="stat" :value="stat">{{ stat }}</option>
+                </select>
+                <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 9l6 6 6-6"/>
+                </svg>
+              </div>
             </div>
 
-            <div class="stat-select-box">
-              <span class="stat-label">Coupe</span>
-              <select v-model="formData.main_stats.goblet" class="stat-select">
-                <option v-for="stat in GOBLET_STATS" :key="stat" :value="stat">{{ stat }}</option>
-              </select>
+            <div class="stat-select-row">
+              <div class="stat-slot-info">
+                <span class="stat-slot-icon">🍷</span>
+                <span class="stat-label">Coupe</span>
+              </div>
+              <div class="stat-select-wrapper">
+                <select v-model="formData.main_stats.goblet" class="stat-select">
+                  <option v-for="stat in GOBLET_STATS" :key="stat" :value="stat">{{ stat }}</option>
+                </select>
+                <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 9l6 6 6-6"/>
+                </svg>
+              </div>
             </div>
 
-            <div class="stat-select-box">
-              <span class="stat-label">Diadème</span>
-              <select v-model="formData.main_stats.circlet" class="stat-select">
-                <option v-for="stat in CIRCLET_STATS" :key="stat" :value="stat">{{ stat }}</option>
-              </select>
+            <div class="stat-select-row">
+              <div class="stat-slot-info">
+                <span class="stat-slot-icon">👑</span>
+                <span class="stat-label">Diadème</span>
+              </div>
+              <div class="stat-select-wrapper">
+                <select v-model="formData.main_stats.circlet" class="stat-select">
+                  <option v-for="stat in CIRCLET_STATS" :key="stat" :value="stat">{{ stat }}</option>
+                </select>
+                <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 9l6 6 6-6"/>
+                </svg>
+              </div>
             </div>
           </div>
         </div>
@@ -437,7 +470,7 @@ async function handleDelete() {
           <span class="label-text">Notes & Rotations</span>
           <textarea
             v-model="formData.notes"
-            rows="2"
+            rows="1"
             class="input-field textarea-field"
             placeholder="ex: Viser 220% Recharge, jouer avec Bennett et Kazuha..."
           ></textarea>
@@ -446,7 +479,7 @@ async function handleDelete() {
         <!-- Boutons d'action -->
         <div class="drawer-footer">
           <button
-            v-if="formData.id && loadouts.length > 1"
+            v-if="formData.id"
             type="button"
             class="btn-delete"
             @click="handleDelete"
@@ -465,6 +498,7 @@ async function handleDelete() {
       v-if="showWeaponPicker"
       :weapons="weapons"
       :weapon-type="character.weapon_type"
+      :character="character"
       :current-weapon-id="formData.weapon_id"
       @select="onWeaponPicked"
       @close="showWeaponPicker = false"
@@ -487,25 +521,30 @@ async function handleDelete() {
   flex-shrink: 0;
   background: #12151C;
   border: 1px solid #1F2430;
-  border-radius: 18px;
+  border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
+  position: sticky;
+  top: 75px;
+  align-self: flex-start;
+  max-height: calc(100vh - 90px);
+  z-index: 20;
 }
 
 .top-glow-bar {
   height: 3px;
   background: var(--hero-color);
-  box-shadow: 0 0 16px var(--hero-color);
+  box-shadow: 0 0 14px var(--hero-color);
 }
 
 .drawer-inner {
-  padding: 1.25rem 1.4rem 1.5rem;
+  padding: 0.85rem 1.1rem 0.85rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  max-height: calc(100vh - 120px);
+  gap: 0.65rem;
+  max-height: calc(100vh - 95px);
   overflow-y: auto;
 }
 
@@ -514,22 +553,24 @@ async function handleDelete() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid #1A1E27;
 }
 
 .avatar-box {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   min-width: 0;
 }
 
 .avatar-halo {
-  width: 64px;
-  height: 64px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 2px solid var(--hero-color);
-  box-shadow: 0 0 20px rgba(124, 240, 208, 0.25);
+  box-shadow: 0 0 12px rgba(124, 240, 208, 0.2);
   background: #0B0D12;
   overflow: hidden;
   display: flex;
@@ -548,14 +589,14 @@ async function handleDelete() {
 .header-info {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.15rem;
   min-width: 0;
 }
 
 .hero-name {
   margin: 0;
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: 1.3rem;
+  font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: #F2F3F7;
@@ -567,8 +608,8 @@ async function handleDelete() {
 .hero-meta {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.78rem;
+  gap: 0.45rem;
+  font-size: 0.75rem;
   color: #8F97AA;
 }
 
@@ -601,17 +642,18 @@ async function handleDelete() {
 }
 
 .btn-close {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   border: 1px solid #262B38;
   background: transparent;
   color: #8F97AA;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .btn-close:hover {
@@ -623,7 +665,7 @@ async function handleDelete() {
 .section-block {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.35rem;
 }
 
 .section-head {
@@ -633,9 +675,9 @@ async function handleDelete() {
 }
 
 .section-title {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #7A8296;
 }
@@ -643,14 +685,14 @@ async function handleDelete() {
 .btn-new-build {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  height: 28px;
-  padding: 0 0.65rem;
-  border-radius: 6px;
+  gap: 0.3rem;
+  height: 24px;
+  padding: 0 0.55rem;
+  border-radius: 5px;
   border: 1px dashed #343B4D;
   background: transparent;
   color: #B7BECC;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
   transition: all 0.15s ease;
 }
@@ -663,17 +705,17 @@ async function handleDelete() {
 .build-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .build-tab {
-  height: 34px;
-  padding: 0 0.85rem;
-  border-radius: 8px;
+  height: 28px;
+  padding: 0 0.75rem;
+  border-radius: 6px;
   border: 1px solid #262B38;
   background: #0F1218;
   color: #8F97AA;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 600;
   transition: all 0.15s ease;
 }
@@ -693,31 +735,31 @@ async function handleDelete() {
 .build-form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.55rem;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.25rem;
 }
 
 .label-text {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #7A8296;
 }
 
 .input-field {
-  height: 40px;
-  padding: 0 0.85rem;
-  border-radius: 9px;
+  height: 32px;
+  padding: 0 0.75rem;
+  border-radius: 7px;
   border: 1px solid #262B38;
   background: #0F1218;
   color: #E7E9EE;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   outline: none;
   transition: border-color 0.15s ease;
 }
@@ -727,18 +769,25 @@ async function handleDelete() {
 }
 
 .textarea-field {
-  height: auto;
-  padding: 0.6rem 0.85rem;
+  height: 34px;
+  min-height: 34px;
+  padding: 0.35rem 0.75rem;
   resize: vertical;
+  line-height: 1.35;
+  transition: height 0.2s ease, border-color 0.15s ease;
+}
+
+.textarea-field:focus {
+  height: 56px;
 }
 
 /* Box Arme */
 .weapon-box {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 0.85rem;
-  border-radius: 12px;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
   background: #0F1218;
   border: 1px solid #1F2430;
 }
@@ -746,14 +795,14 @@ async function handleDelete() {
 .weapon-display {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
   cursor: pointer;
 }
 
 .weapon-icon-frame {
-  width: 46px;
-  height: 46px;
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   background: #141821;
   border: 1px solid #262B38;
   display: flex;
@@ -765,7 +814,7 @@ async function handleDelete() {
 
 .weapon-icon-frame.rarity-5 {
   border-color: #F3C552;
-  box-shadow: 0 0 10px rgba(243, 197, 82, 0.25);
+  box-shadow: 0 0 8px rgba(243, 197, 82, 0.25);
 }
 
 .weapon-icon-frame.rarity-4 {
@@ -783,11 +832,11 @@ async function handleDelete() {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.1rem;
 }
 
 .weapon-title {
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: #E7E9EE;
   white-space: nowrap;
@@ -796,20 +845,31 @@ async function handleDelete() {
 }
 
 .weapon-sub {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: #8F97AA;
+  display: flex;
+  align-items: center;
+}
+
+.signature-indicator {
+  margin-left: 0.4rem;
+  color: #F3C552;
+  font-weight: 700;
+  font-size: 0.68rem;
+  text-shadow: 0 0 8px rgba(243, 197, 82, 0.4);
 }
 
 .btn-change-item {
-  height: 30px;
-  padding: 0 0.75rem;
-  border-radius: 7px;
+  height: 26px;
+  padding: 0 0.65rem;
+  border-radius: 6px;
   border: 1px solid #2A3040;
   background: #161A23;
   color: #C9CEDA;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .btn-change-item:hover {
@@ -821,30 +881,30 @@ async function handleDelete() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  padding-top: 0.5rem;
+  gap: 0.4rem;
+  padding-top: 0.35rem;
   border-top: 1px solid #1A1E27;
 }
 
 .ref-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: #8F97AA;
 }
 
 .ref-buttons {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.25rem;
 }
 
 .ref-btn {
-  width: 32px;
-  height: 30px;
-  border-radius: 6px;
+  width: 28px;
+  height: 24px;
+  border-radius: 5px;
   border: 1px solid #262B38;
   background: #12151C;
   color: #8F97AA;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
   transition: all 0.15s ease;
 }
@@ -863,18 +923,18 @@ async function handleDelete() {
 /* Artéfacts */
 .mode-toggle {
   display: flex;
-  gap: 0.25rem;
+  gap: 0.2rem;
   padding: 2px;
   background: #0B0D12;
   border: 1px solid #1F2430;
-  border-radius: 8px;
+  border-radius: 6px;
 }
 
 .mode-btn {
-  height: 26px;
-  padding: 0 0.65rem;
-  border-radius: 6px;
-  font-size: 0.75rem;
+  height: 22px;
+  padding: 0 0.55rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
   font-weight: 600;
   color: #8F97AA;
   transition: all 0.15s ease;
@@ -886,8 +946,8 @@ async function handleDelete() {
 }
 
 .artifact-card {
-  padding: 0.75rem 0.85rem;
-  border-radius: 12px;
+  padding: 0.45rem 0.75rem;
+  border-radius: 10px;
   background: #0F1218;
   border: 1px solid #1F2430;
 }
@@ -895,12 +955,12 @@ async function handleDelete() {
 .artifact-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 
 .artifact-icon-frame {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: #141821;
   border: 1px solid #262B38;
@@ -922,11 +982,11 @@ async function handleDelete() {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.1rem;
 }
 
 .artifact-title {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: #E7E9EE;
   white-space: nowrap;
@@ -935,7 +995,7 @@ async function handleDelete() {
 }
 
 .artifact-sub {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
 }
 
@@ -948,43 +1008,81 @@ async function handleDelete() {
 }
 
 /* Main Stats */
-.main-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
-}
-
-.stat-select-box {
+.main-stats-list {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.6rem 0.7rem;
-  border-radius: 10px;
+  gap: 0.3rem;
+}
+
+.stat-select-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.65rem;
+  height: 32px;
+  border-radius: 8px;
   background: #0F1218;
   border: 1px solid #1F2430;
+  transition: border-color 0.15s ease;
+}
+
+.stat-select-row:focus-within {
+  border-color: #7CF0D0;
+}
+
+.stat-slot-info {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 84px;
+  flex-shrink: 0;
+}
+
+.stat-slot-icon {
+  font-size: 0.85rem;
 }
 
 .stat-label {
-  font-size: 0.68rem;
-  color: #6E768A;
-  text-transform: uppercase;
+  font-size: 0.7rem;
+  color: #8F97AA;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-select-wrapper {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .stat-select {
+  appearance: none;
+  -webkit-appearance: none;
   background: transparent;
   border: none;
   outline: none;
   color: #E7E9EE;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   width: 100%;
+  padding-right: 1.25rem;
+}
+
+.select-chevron {
+  position: absolute;
+  right: 0.2rem;
+  pointer-events: none;
+  color: #8F97AA;
 }
 
 .stat-select option {
   background: #12151C;
   color: #E7E9EE;
+  padding: 0.3rem;
 }
 
 /* Footer */
@@ -992,19 +1090,23 @@ async function handleDelete() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding-top: 0.5rem;
+  gap: 0.65rem;
+  padding-top: 0.45rem;
   border-top: 1px solid #1A1E27;
+  position: sticky;
+  bottom: 0;
+  background: #12151C;
+  z-index: 10;
 }
 
 .btn-delete {
-  height: 38px;
-  padding: 0 0.85rem;
-  border-radius: 8px;
+  height: 34px;
+  padding: 0 0.8rem;
+  border-radius: 7px;
   border: 1px solid rgba(255, 107, 107, 0.4);
   background: transparent;
   color: #FF8A8A;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
   transition: all 0.15s ease;
 }
@@ -1015,13 +1117,13 @@ async function handleDelete() {
 
 .btn-save {
   margin-left: auto;
-  height: 38px;
-  padding: 0 1.25rem;
-  border-radius: 8px;
+  height: 34px;
+  padding: 0 1.15rem;
+  border-radius: 7px;
   border: 1px solid #7CF0D0;
   background: #7CF0D0;
   color: #0B0D12;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 700;
   transition: all 0.15s ease;
 }

@@ -10,7 +10,8 @@ import {
   computeSynergies,
   createTeam,
   updateTeam,
-  deleteTeam
+  deleteTeam,
+  normalizeElement
 } from '../api.js';
 
 const props = defineProps({
@@ -197,6 +198,7 @@ const showEditModal = ref(false);
 const editingTeamId = ref(null);
 const editorActiveSlot = ref(1); // 1, 2, 3 ou 4
 const editorElementFilter = ref('ALL');
+const editorSearchQuery = ref('');
 
 const editorForm = ref({
   name: 'Nouvelle Team',
@@ -208,6 +210,7 @@ function openNewTeamModal() {
   editingTeamId.value = null;
   editorActiveSlot.value = 1;
   editorElementFilter.value = 'ALL';
+  editorSearchQuery.value = '';
   editorForm.value = {
     name: 'Nouvelle Team',
     description: '',
@@ -220,6 +223,7 @@ function openEditTeamModal(team) {
   editingTeamId.value = team.id;
   editorActiveSlot.value = 1;
   editorElementFilter.value = 'ALL';
+  editorSearchQuery.value = '';
   editorForm.value = {
     name: team.name,
     description: team.description || '',
@@ -238,9 +242,14 @@ const editorSynergies = computed(() => {
 
 const editorFilteredCharacters = computed(() => {
   return props.characters.filter(c => {
-    if (editorElementFilter.value === 'ALL') return true;
-    const el = ELEMENT_LABELS[c.element] || c.element;
-    return el === editorElementFilter.value;
+    if (editorElementFilter.value !== 'ALL') {
+      if (normalizeElement(c.element) !== normalizeElement(editorElementFilter.value)) return false;
+    }
+    if (editorSearchQuery.value.trim()) {
+      const q = editorSearchQuery.value.toLowerCase().trim();
+      if (!c.name.toLowerCase().includes(q)) return false;
+    }
+    return true;
   });
 });
 
@@ -384,37 +393,44 @@ async function deleteEditorTeam() {
                   {{ charactersMap[team[`slot${s}_character_id`]].name }}
                 </span>
 
-                <!-- Vignettes d'équipements : Arme + Set d'artéfacts -->
+                <!-- Vignettes d'équipements : Arme + Set d'artéfacts agrandis -->
                 <div class="slot-gear-preview" v-if="team[`slot${s}_loadout_id`] && loadoutsMap[team[`slot${s}_loadout_id`]]">
                   <!-- Arme -->
                   <div
                     v-if="weaponsMap[loadoutsMap[team[`slot${s}_loadout_id`]].weapon_id]"
-                    class="gear-icon-chip"
+                    :class="['gear-icon-chip', `rarity-${weaponsMap[loadoutsMap[team[`slot${s}_loadout_id`]].weapon_id].rarity || 4}`]"
                     :title="`${weaponsMap[loadoutsMap[team[`slot${s}_loadout_id`]].weapon_id].name} (R${loadoutsMap[team[`slot${s}_loadout_id`]].weapon_refinement || 1})`"
                   >
                     <img :src="getIconUrl(weaponsMap[loadoutsMap[team[`slot${s}_loadout_id`]].weapon_id].icon)" class="gear-img" />
-                    <span class="gear-sub-tag">R{{ loadoutsMap[team[`slot${s}_loadout_id`]].weapon_refinement || 1 }}</span>
+                    <span class="gear-sub-tag tag-refinement">R{{ loadoutsMap[team[`slot${s}_loadout_id`]].weapon_refinement || 1 }}</span>
                   </div>
 
                   <!-- Artéfact Set 1 -->
                   <div
                     v-if="relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_1_id]"
-                    class="gear-icon-chip"
+                    :class="['gear-icon-chip', `rarity-${relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_1_id].rarity || 5}`]"
                     :title="`${relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_1_id].name}`"
                   >
-                    <img :src="getIconUrl(relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_1_id].icon)" class="gear-img" />
-                    <span class="gear-sub-tag">{{ loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id ? '2p' : '4p' }}</span>
+                    <img :src="getIconUrl(relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_1_id].icon, 'reliquary')" class="gear-img" />
+                    <span :class="['gear-sub-tag', loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id ? 'tag-relic-2p' : 'tag-relic-4p']">
+                      {{ loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id ? '2p' : '4p' }}
+                    </span>
                   </div>
 
                   <!-- Artéfact Set 2 (si 2+2) -->
                   <div
                     v-if="loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id && relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id]"
-                    class="gear-icon-chip"
+                    :class="['gear-icon-chip', `rarity-${relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id].rarity || 5}`]"
                     :title="`${relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id].name}`"
                   >
-                    <img :src="getIconUrl(relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id].icon)" class="gear-img" />
-                    <span class="gear-sub-tag">2p</span>
+                    <img :src="getIconUrl(relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id].icon, 'reliquary')" class="gear-img" />
+                    <span class="gear-sub-tag tag-relic-2p">2p</span>
                   </div>
+                </div>
+
+                <!-- Espace réservé si aucun build assigné pour garder l'alignement parfait -->
+                <div v-else class="slot-gear-empty">
+                  <span class="gear-empty-text">Aucun équipement</span>
                 </div>
 
                 <!-- Bouton Nom du Build qui ouvre la modale de sélection de build -->
@@ -609,11 +625,6 @@ async function deleteEditorTeam() {
                 </div>
               </div>
             </div>
-
-            <!-- Stats principales -->
-            <div v-if="b.main_stats" class="build-stats-preview">
-              <span>Stats : {{ b.main_stats }}</span>
-            </div>
           </div>
 
           <div
@@ -641,7 +652,7 @@ async function deleteEditorTeam() {
           <button type="button" class="btn-close-modal" @click="showEditModal = false">✕</button>
         </div>
 
-        <form @submit.prevent="saveEditorTeam">
+        <form class="team-editor-form" @submit.prevent="saveEditorTeam">
           <div class="editor-field-row">
             <label class="form-label">
               <span>Nom de la team</span>
@@ -704,6 +715,20 @@ async function deleteEditorTeam() {
                 Cliquez pour assigner au <strong>Slot {{ editorActiveSlot }}</strong> :
               </span>
 
+              <!-- Barre de recherche rapide de perso -->
+              <div class="roster-search-bar">
+                <svg class="search-mini-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input
+                  v-model="editorSearchQuery"
+                  type="search"
+                  placeholder="Rechercher par nom..."
+                  class="roster-search-input"
+                />
+              </div>
+
               <!-- Filtres Éléments -->
               <div class="roster-el-filters">
                 <button
@@ -713,7 +738,12 @@ async function deleteEditorTeam() {
                   :class="['roster-filter-btn', { active: editorElementFilter === el }]"
                   @click="editorElementFilter = el"
                 >
-                  {{ el === 'ALL' ? 'Tous' : (ELEMENT_LABELS[el] || el) }}
+                  <img
+                    v-if="el !== 'ALL'"
+                    :src="getElementIconUrl(el)"
+                    class="roster-el-icon"
+                  />
+                  <span>{{ el === 'ALL' ? 'Tous' : (ELEMENT_LABELS[el] || el) }}</span>
                 </button>
               </div>
             </div>
@@ -730,12 +760,17 @@ async function deleteEditorTeam() {
               >
                 <div
                   class="roster-char-ring"
-                  :style="{ borderColor: ELEMENT_COLORS[char.element] }"
+                  :style="{ borderColor: ELEMENT_COLORS[char.element] || '#7CF0D0' }"
                 >
                   <img :src="getIconUrl(char.icon)" class="avatar-img" />
+                  <img :src="getElementIconUrl(char.element)" class="char-mini-el" />
                 </div>
                 <span class="roster-char-name">{{ char.name }}</span>
               </button>
+
+              <div v-if="editorFilteredCharacters.length === 0" class="empty-roster-hint">
+                Aucun personnage ne correspond à vos filtres.
+              </div>
             </div>
           </div>
 
@@ -904,12 +939,13 @@ async function deleteEditorTeam() {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 0.85rem 0.6rem;
+  padding: 1rem 0.65rem 0.85rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.55rem;
   text-align: center;
+  min-height: 215px;
 }
 
 .slot-avatar-container {
@@ -965,56 +1001,109 @@ async function deleteEditorTeam() {
   max-width: 100%;
 }
 
-/* Vignettes d'équipements */
+/* Vignettes d'équipements agrandies (44px) */
 .slot-gear-preview {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.55rem;
   align-items: center;
   justify-content: center;
+  min-height: 44px;
+}
+
+.slot-gear-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.gear-empty-text {
+  font-size: 0.68rem;
+  color: #4A5264;
+  font-style: italic;
 }
 
 .gear-icon-chip {
   position: relative;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
   background: var(--bg-dark);
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gear-icon-chip:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+.gear-icon-chip.rarity-5 {
+  border-color: rgba(243, 197, 82, 0.7);
+  background: radial-gradient(circle, #7e4b17 0%, #151822 100%);
+  box-shadow: 0 0 10px rgba(243, 197, 82, 0.2);
+}
+
+.gear-icon-chip.rarity-4 {
+  border-color: rgba(185, 140, 255, 0.7);
+  background: radial-gradient(circle, #52296e 0%, #151822 100%);
+  box-shadow: 0 0 8px rgba(185, 140, 255, 0.15);
+}
+
+.gear-icon-chip.rarity-3 {
+  border-color: rgba(66, 153, 225, 0.7);
+  background: radial-gradient(circle, #1e457e 0%, #151822 100%);
 }
 
 .gear-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  padding: 3px;
 }
 
 .gear-sub-tag {
   position: absolute;
   bottom: 0;
   right: 0;
-  background: rgba(0, 0, 0, 0.8);
-  font-size: 0.55rem;
+  font-size: 0.6rem;
   font-weight: 800;
-  padding: 0 2px;
-  line-height: 1;
-  color: var(--accent-mint);
-  border-top-left-radius: 3px;
+  padding: 1px 4px;
+  line-height: 1.1;
+  border-top-left-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.gear-sub-tag.tag-refinement {
+  background: #F3C552;
+  color: #0B0D12;
+}
+
+.gear-sub-tag.tag-relic-4p {
+  background: #7CF0D0;
+  color: #0B0D12;
+}
+
+.gear-sub-tag.tag-relic-2p {
+  background: #E8A838;
+  color: #0B0D12;
 }
 
 /* Pilule du build */
 .slot-loadout-pill {
+  margin-top: auto;
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
   border: 1px solid;
   border-radius: 9999px;
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-weight: 700;
-  padding: 0.25rem 0.6rem;
+  padding: 0.28rem 0.75rem;
   cursor: pointer;
   max-width: 100%;
   transition: all 0.2s ease;
@@ -1304,11 +1393,6 @@ async function deleteEditorTeam() {
   color: var(--accent-mint);
 }
 
-.build-stats-preview {
-  font-size: 0.72rem;
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-}
 
 .empty-picker-notice {
   text-align: center;
@@ -1342,6 +1426,12 @@ async function deleteEditorTeam() {
   font-size: 1.3rem;
   font-weight: 700;
   color: var(--text-main);
+}
+
+.team-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .form-label {
@@ -1378,11 +1468,11 @@ async function deleteEditorTeam() {
   background: var(--bg-dark);
   border: 1.5px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 0.75rem 0.5rem;
+  padding: 0.9rem 0.6rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   cursor: pointer;
   position: relative;
   transition: all 0.15s ease;
@@ -1403,8 +1493,8 @@ async function deleteEditorTeam() {
 }
 
 .editor-slot-avatar {
-  width: 44px;
-  height: 44px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   border: 2px solid;
   overflow: hidden;
@@ -1434,14 +1524,14 @@ async function deleteEditorTeam() {
 }
 
 .editor-slot-empty {
-  width: 44px;
-  height: 44px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   border: 1px dashed var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   color: var(--accent-mint);
 }
 
@@ -1453,19 +1543,17 @@ async function deleteEditorTeam() {
 .editor-roster-section {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.75rem;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 0.9rem;
+  padding: 1rem;
 }
 
 .editor-roster-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
 .roster-instruction {
@@ -1473,76 +1561,144 @@ async function deleteEditorTeam() {
   color: var(--text-muted);
 }
 
+.roster-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.75rem;
+  width: 100%;
+}
+
+.search-mini-icon {
+  color: var(--accent-mint);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.roster-search-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  width: 100%;
+}
+
 .roster-el-filters {
   display: flex;
-  gap: 0.25rem;
+  gap: 0.35rem;
   flex-wrap: wrap;
+}
+
+.roster-el-icon {
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
 }
 
 .roster-filter-btn {
   background: var(--bg-dark);
   border: 1px solid var(--border-subtle);
   color: var(--text-dim);
-  font-size: 0.7rem;
-  padding: 0.2rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
   border-radius: 9999px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: all 0.15s ease;
+}
+
+.roster-filter-btn:hover {
+  border-color: var(--border-accent);
+  color: var(--text-main);
 }
 
 .roster-filter-btn.active {
   border-color: var(--accent-mint);
   color: var(--accent-mint);
+  background: rgba(124, 240, 208, 0.1);
 }
 
 .editor-roster-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
-  gap: 0.5rem;
-  max-height: 220px;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: 0.6rem;
+  max-height: 290px;
   overflow-y: auto;
   padding-right: 0.3rem;
 }
 
 .roster-char-item {
-  background: transparent;
-  border: 1px solid transparent;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 0.3rem;
+  padding: 0.5rem 0.25rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.35rem;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .roster-char-item:hover {
-  background: var(--bg-surface);
-  border-color: var(--border-accent);
+  background: var(--bg-surface-hover);
+  border-color: var(--accent-mint);
+  transform: translateY(-2px);
 }
 
 .roster-char-item.selected {
-  opacity: 0.4;
+  opacity: 0.45;
   filter: grayscale(0.8);
 }
 
 .roster-char-ring {
-  width: 40px;
-  height: 40px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  border: 1.5px solid;
+  border: 2px solid;
   overflow: hidden;
-  background: var(--bg-dark);
+  background: var(--bg-surface);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.char-mini-el {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(11, 13, 18, 0.85);
+  padding: 1px;
 }
 
 .roster-char-name {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
+  font-weight: 600;
   color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 65px;
+  max-width: 76px;
   text-align: center;
+}
+
+.empty-roster-hint {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-dim);
+  font-size: 0.85rem;
 }
 
 .editor-bottom-actions {

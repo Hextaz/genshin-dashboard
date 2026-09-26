@@ -4,12 +4,15 @@ import {
   getIconUrl,
   ELEMENT_COLORS,
   ELEMENT_LABELS,
+  getElementIconUrl,
   WEAPON_LABELS,
   WEAPON_SVGS,
+  normalizeElement,
   fetchPlanner,
   createPlannerItem,
   updatePlannerItem,
-  deletePlannerItem
+  deletePlannerItem,
+  calculatePlannerProgress
 } from '../api.js';
 
 const props = defineProps({
@@ -41,6 +44,7 @@ const TIERS = [
 const LEVEL_STEPS = [1, 20, 40, 50, 60, 70, 80, 90];
 
 const TAG_CONFIG = {
+  none: { label: 'Aucune action', color: '#8E9BAE' },
   set_change: { label: 'Changement de set', color: '#FFA05A' },
   upgrade_levels: { label: 'Amélioration pièces', color: '#6FB8FF' },
   substat_farm: { label: 'Optimisation stats', color: '#C29BFF' }
@@ -95,17 +99,9 @@ const itemsByTier = computed(() => {
   };
 });
 
-// Calcul de progression (fraction x/y et %)
+// Calcul de progression adaptatif (fraction x/y et %)
 function getItemProgress(item) {
-  if (item.target_type === 'character') {
-    const total = 3;
-    const done = (item.is_level_done ? 1 : 0) + (item.is_talents_done ? 1 : 0) + (item.is_artifacts_done ? 1 : 0);
-    return { done, total, pct: Math.round((done / total) * 100), completed: done === total };
-  } else {
-    const total = 2;
-    const done = (item.is_level_done ? 1 : 0) + (item.is_weapon_done ? 1 : 0);
-    return { done, total, pct: Math.round((done / total) * 100), completed: done === total };
-  }
+  return calculatePlannerProgress(item);
 }
 
 // Toggle d'une checkbox avec mise à jour immédiate
@@ -138,8 +134,11 @@ const modalForm = ref({
   tier: 'S',
   current_level: 80,
   target_level: 90,
+  talent_normal_current: 1,
   talent_normal_target: 1,
+  talent_skill_current: 1,
   talent_skill_target: 9,
+  talent_burst_current: 1,
   talent_burst_target: 10,
   weapon_target_level: 90,
   weapon_refinement: 1,
@@ -152,8 +151,55 @@ const modalForm = ref({
   is_artifacts_done: 0
 });
 
+const charSearchQuery = ref('');
+const charElementFilter = ref('ALL');
+const charRarityFilter = ref('ALL');
+const weaponSearchQuery = ref('');
+const weaponTypeFilter = ref('ALL');
+const weaponRarityFilter = ref('ALL');
+
+const weaponsTypesList = ['ALL', 'WEAPON_SWORD_ONE_HAND', 'WEAPON_CLAYMORE', 'WEAPON_POLE', 'WEAPON_BOW', 'WEAPON_CATALYST'];
+
+const modalFilteredCharacters = computed(() => {
+  return props.characters.filter(c => {
+    if (charElementFilter.value !== 'ALL') {
+      if (normalizeElement(c.element) !== normalizeElement(charElementFilter.value)) return false;
+    }
+    if (charRarityFilter.value !== 'ALL') {
+      if (c.rarity !== Number(charRarityFilter.value)) return false;
+    }
+    if (charSearchQuery.value.trim()) {
+      const q = charSearchQuery.value.toLowerCase().trim();
+      if (!c.name.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+});
+
+const modalFilteredWeapons = computed(() => {
+  return props.weapons.filter(w => {
+    if (weaponTypeFilter.value !== 'ALL') {
+      if (w.weapon_type !== weaponTypeFilter.value) return false;
+    }
+    if (weaponRarityFilter.value !== 'ALL') {
+      if (w.rarity !== Number(weaponRarityFilter.value)) return false;
+    }
+    if (weaponSearchQuery.value.trim()) {
+      const q = weaponSearchQuery.value.toLowerCase().trim();
+      if (!w.name.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+});
+
 function openNewGoal(tierId = 'S') {
   editingItemId.value = null;
+  charSearchQuery.value = '';
+  charElementFilter.value = 'ALL';
+  charRarityFilter.value = 'ALL';
+  weaponSearchQuery.value = '';
+  weaponTypeFilter.value = 'ALL';
+  weaponRarityFilter.value = 'ALL';
   const defChar = props.characters[0];
   const rawCharId = defChar ? Number(defChar.id.replace('avatar_', '')) : null;
   const defRelic = props.reliquaries[0];
@@ -169,8 +215,11 @@ function openNewGoal(tierId = 'S') {
     tier: tierId,
     current_level: 80,
     target_level: 90,
+    talent_normal_current: 1,
     talent_normal_target: 1,
+    talent_skill_current: 1,
     talent_skill_target: 9,
+    talent_burst_current: 1,
     talent_burst_target: 10,
     weapon_target_level: 90,
     weapon_refinement: 1,
@@ -187,10 +236,23 @@ function openNewGoal(tierId = 'S') {
 
 function openEditGoal(item) {
   editingItemId.value = item.id;
+  charSearchQuery.value = '';
+  charElementFilter.value = 'ALL';
+  charRarityFilter.value = 'ALL';
+  weaponSearchQuery.value = '';
+  weaponTypeFilter.value = 'ALL';
+  weaponRarityFilter.value = 'ALL';
   modalForm.value = {
     ...item,
+    talent_normal_current: item.talent_normal_current || 1,
+    talent_normal_target: item.talent_normal_target || 1,
+    talent_skill_current: item.talent_skill_current || 1,
+    talent_skill_target: item.talent_skill_target || 8,
+    talent_burst_current: item.talent_burst_current || 1,
+    talent_burst_target: item.talent_burst_target || 8,
     weapon_refinement: item.weapon_refinement || 1,
-    artifact_set_id: item.artifact_set_id || (props.reliquaries[0] ? Number(props.reliquaries[0].id.replace('relic_', '')) : null)
+    artifact_set_id: item.artifact_set_id || (props.reliquaries[0] ? Number(props.reliquaries[0].id.replace('relic_', '')) : null),
+    artifact_action: item.artifact_action || 'none'
   };
   showModal.value = true;
 }
@@ -224,11 +286,29 @@ function stepLevel(field, delta) {
   }
 }
 
-// Steppers Talents
+// Steppers Talents avec cohérence Actuel/Objectif
 function stepTalent(field, delta) {
-  const val = modalForm.value[field] + delta;
-  if (val >= 1 && val <= 10) {
-    modalForm.value[field] = val;
+  const currentVal = modalForm.value[field] !== undefined ? modalForm.value[field] : 1;
+  const val = currentVal + delta;
+  if (val < 1 || val > 10) return;
+  modalForm.value[field] = val;
+
+  // Si le niveau actuel dépasse l'objectif, réajuster l'objectif
+  if (field === 'talent_normal_current' && modalForm.value.talent_normal_target < val) {
+    modalForm.value.talent_normal_target = val;
+  } else if (field === 'talent_skill_current' && modalForm.value.talent_skill_target < val) {
+    modalForm.value.talent_skill_target = val;
+  } else if (field === 'talent_burst_current' && modalForm.value.talent_burst_target < val) {
+    modalForm.value.talent_burst_target = val;
+  }
+
+  // Si l'objectif descend sous le niveau actuel, réajuster le niveau actuel
+  if (field === 'talent_normal_target' && modalForm.value.talent_normal_current > val) {
+    modalForm.value.talent_normal_current = val;
+  } else if (field === 'talent_skill_target' && modalForm.value.talent_skill_current > val) {
+    modalForm.value.talent_skill_current = val;
+  } else if (field === 'talent_burst_target' && modalForm.value.talent_burst_current > val) {
+    modalForm.value.talent_burst_current = val;
   }
 }
 
@@ -243,12 +323,15 @@ async function handleSaveGoal() {
     tier: modalForm.value.tier,
     current_level: modalForm.value.current_level,
     target_level: modalForm.value.target_level,
+    talent_normal_current: modalForm.value.talent_normal_current || 1,
     talent_normal_target: modalForm.value.talent_normal_target,
+    talent_skill_current: modalForm.value.talent_skill_current || 1,
     talent_skill_target: modalForm.value.talent_skill_target,
+    talent_burst_current: modalForm.value.talent_burst_current || 1,
     talent_burst_target: modalForm.value.talent_burst_target,
     weapon_target_level: modalForm.value.target_level,
     weapon_refinement: modalForm.value.weapon_refinement,
-    artifact_action: modalForm.value.artifact_action,
+    artifact_action: modalForm.value.artifact_action || 'none',
     artifact_set_id: modalForm.value.artifact_set_id,
     artifact_notes: modalForm.value.artifact_notes,
     is_level_done: modalForm.value.is_level_done,
@@ -257,6 +340,10 @@ async function handleSaveGoal() {
     is_artifacts_done: modalForm.value.is_artifacts_done,
     is_completed: modalForm.value.is_completed
   };
+
+  // Recalculer l'état complété
+  const prog = calculatePlannerProgress(payload);
+  payload.is_completed = prog.completed ? 1 : 0;
 
   try {
     if (editingItemId.value) {
@@ -378,10 +465,14 @@ async function handleDeleteGoal() {
               ></div>
             </div>
 
-            <!-- Checklist interactive -->
+            <!-- Checklist interactive intelligente -->
             <div class="checklist">
-              <!-- Item Niveau -->
-              <div class="check-row" @click="toggleCheck(item, 'is_level_done')">
+              <!-- Item Niveau : interactif si niveau inférieur à l'objectif, sinon marqué Atteint -->
+              <div
+                v-if="item.current_level < item.target_level"
+                class="check-row"
+                @click="toggleCheck(item, 'is_level_done')"
+              >
                 <input
                   type="checkbox"
                   :checked="!!item.is_level_done"
@@ -392,10 +483,20 @@ async function handleDeleteGoal() {
                   Niv. {{ item.current_level }} → {{ item.target_level }}
                 </span>
               </div>
+              <div v-else class="check-row static-achieved">
+                <span class="check-achieved-badge">✓</span>
+                <span class="check-label">Niveau</span>
+                <span class="check-value achieved">Niv. {{ item.target_level }} (Atteint)</span>
+              </div>
 
               <!-- Si Personnage : Talents et Artéfacts -->
               <template v-if="item.target_type === 'character'">
-                <div class="check-row" @click="toggleCheck(item, 'is_talents_done')">
+                <!-- Talents : interactif si au moins un talent progresse -->
+                <div
+                  v-if="(item.talent_normal_current || 1) < (item.talent_normal_target || 1) || (item.talent_skill_current || 1) < (item.talent_skill_target || 1) || (item.talent_burst_current || 1) < (item.talent_burst_target || 1)"
+                  class="check-row"
+                  @click="toggleCheck(item, 'is_talents_done')"
+                >
                   <input
                     type="checkbox"
                     :checked="!!item.is_talents_done"
@@ -403,13 +504,25 @@ async function handleDeleteGoal() {
                   />
                   <span class="check-label">Talents</span>
                   <div :class="['talents-badges', { done: item.is_talents_done }]">
-                    <span class="tal-badge">Att. {{ item.talent_normal_target }}</span>
-                    <span class="tal-badge">E {{ item.talent_skill_target }}</span>
-                    <span class="tal-badge">Q {{ item.talent_burst_target }}</span>
+                    <span class="tal-badge">Att. {{ item.talent_normal_current || 1 }}→{{ item.talent_normal_target }}</span>
+                    <span class="tal-badge">E {{ item.talent_skill_current || 1 }}→{{ item.talent_skill_target }}</span>
+                    <span class="tal-badge">Q {{ item.talent_burst_current || 1 }}→{{ item.talent_burst_target }}</span>
+                  </div>
+                </div>
+                <div v-else class="check-row static-achieved">
+                  <span class="check-achieved-badge">✓</span>
+                  <span class="check-label">Talents</span>
+                  <div class="talents-badges achieved">
+                    <span class="tal-badge">{{ item.talent_normal_target }}/{{ item.talent_skill_target }}/{{ item.talent_burst_target }} (Atteints)</span>
                   </div>
                 </div>
 
-                <div class="check-row" @click="toggleCheck(item, 'is_artifacts_done')">
+                <!-- Artéfacts : affiché uniquement si une action réelle est choisie -->
+                <div
+                  v-if="item.artifact_action && item.artifact_action !== 'none'"
+                  class="check-row"
+                  @click="toggleCheck(item, 'is_artifacts_done')"
+                >
                   <input
                     type="checkbox"
                     :checked="!!item.is_artifacts_done"
@@ -500,40 +613,129 @@ async function handleDeleteGoal() {
                 {{ modalForm.target_type === 'character' ? 'Choisir un personnage' : 'Choisir une arme' }}
               </span>
 
-              <!-- Grille des personnages à cliquer -->
-              <div v-if="modalForm.target_type === 'character'" class="dialog-chars-grid scroll">
-                <button
-                  v-for="c in characters"
-                  :key="c.id"
-                  type="button"
-                  :class="['dialog-char-tile', { active: modalForm.character_id === Number(c.id.replace('avatar_', '')) }]"
-                  @click="selectCharacterInModal(c)"
-                >
-                  <div class="tile-avatar-wrap" :style="{ borderColor: ELEMENT_COLORS[c.element] }">
-                    <img :src="getIconUrl(c.icon)" class="avatar-img" />
-                  </div>
-                  <span class="tile-char-name">{{ c.name }}</span>
-                </button>
-              </div>
+              <!-- Cas 1 : Sélection Personnage avec Recherche & Filtres Éléments -->
+              <template v-if="modalForm.target_type === 'character'">
+                <div class="modal-search-box">
+                  <svg class="search-mini-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <input
+                    v-model="charSearchQuery"
+                    type="search"
+                    placeholder="Rechercher un personnage..."
+                    class="modal-search-input"
+                  />
+                </div>
 
-              <!-- Grille des armes à cliquer -->
-              <div v-else class="dialog-weapons-grid scroll">
-                <button
-                  v-for="w in weapons"
-                  :key="w.id"
-                  type="button"
-                  :class="['dialog-weapon-tile', { active: modalForm.weapon_id === Number(w.id.replace('weapon_', '')) }]"
-                  @click="selectWeaponInModal(w)"
-                >
-                  <div class="tile-weapon-icon" :class="`rarity-${w.rarity}`">
-                    <img :src="getIconUrl(w.icon)" class="avatar-img" />
+                <div class="modal-filter-pills">
+                  <button
+                    v-for="el in ['ALL', 'Pyro', 'Hydro', 'Anemo', 'Electro', 'Dendro', 'Cryo', 'Geo']"
+                    :key="el"
+                    type="button"
+                    :class="['modal-filter-pill', { active: charElementFilter === el }]"
+                    @click="charElementFilter = el"
+                  >
+                    <img v-if="el !== 'ALL'" :src="getElementIconUrl(el)" class="filter-pill-el-icon" />
+                    <span>{{ el === 'ALL' ? 'Tous' : (ELEMENT_LABELS[el] || el) }}</span>
+                  </button>
+                  <div class="filter-pills-sep"></div>
+                  <button
+                    v-for="r in ['ALL', '5', '4']"
+                    :key="r"
+                    type="button"
+                    :class="['modal-filter-pill', { active: charRarityFilter === r }]"
+                    @click="charRarityFilter = r"
+                  >
+                    {{ r === 'ALL' ? 'Toutes' : `${r}★` }}
+                  </button>
+                </div>
+
+                <!-- Grille des personnages à cliquer -->
+                <div class="dialog-chars-grid scroll">
+                  <button
+                    v-for="c in modalFilteredCharacters"
+                    :key="c.id"
+                    type="button"
+                    :class="['dialog-char-tile', { active: modalForm.character_id === Number(c.id.replace('avatar_', '')) }]"
+                    @click="selectCharacterInModal(c)"
+                  >
+                    <div class="tile-avatar-wrap" :style="{ borderColor: ELEMENT_COLORS[c.element] || '#7CF0D0' }">
+                      <img :src="getIconUrl(c.icon)" class="avatar-img" />
+                      <img :src="getElementIconUrl(c.element)" class="char-mini-el" />
+                    </div>
+                    <span class="tile-char-name">{{ c.name }}</span>
+                  </button>
+
+                  <div v-if="modalFilteredCharacters.length === 0" class="empty-picker-text">
+                    Aucun personnage trouvé.
                   </div>
-                  <div class="tile-weapon-text">
-                    <span class="tile-weapon-name">{{ w.name }}</span>
-                    <span class="tile-weapon-sub">{{ WEAPON_LABELS[w.weapon_type] || '' }}</span>
+                </div>
+              </template>
+
+              <!-- Cas 2 : Sélection Arme avec Recherche & Filtres Type d'Arme -->
+              <template v-else>
+                <div class="modal-search-box">
+                  <svg class="search-mini-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <input
+                    v-model="weaponSearchQuery"
+                    type="search"
+                    placeholder="Rechercher une arme..."
+                    class="modal-search-input"
+                  />
+                </div>
+
+                <div class="modal-filter-pills">
+                  <button
+                    v-for="wType in weaponsTypesList"
+                    :key="wType"
+                    type="button"
+                    :class="['modal-filter-pill', { active: weaponTypeFilter === wType }]"
+                    @click="weaponTypeFilter = wType"
+                  >
+                    <svg v-if="wType !== 'ALL'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-svg">
+                      <path :d="WEAPON_SVGS[wType]" />
+                    </svg>
+                    <span>{{ wType === 'ALL' ? 'Toutes armes' : (WEAPON_LABELS[wType] || wType) }}</span>
+                  </button>
+                  <div class="filter-pills-sep"></div>
+                  <button
+                    v-for="r in ['ALL', '5', '4', '3']"
+                    :key="r"
+                    type="button"
+                    :class="['modal-filter-pill', { active: weaponRarityFilter === r }]"
+                    @click="weaponRarityFilter = r"
+                  >
+                    {{ r === 'ALL' ? 'Toutes' : `${r}★` }}
+                  </button>
+                </div>
+
+                <!-- Grille des armes à cliquer -->
+                <div class="dialog-weapons-grid scroll">
+                  <button
+                    v-for="w in modalFilteredWeapons"
+                    :key="w.id"
+                    type="button"
+                    :class="['dialog-weapon-tile', { active: modalForm.weapon_id === Number(w.id.replace('weapon_', '')) }]"
+                    @click="selectWeaponInModal(w)"
+                  >
+                    <div class="tile-weapon-icon" :class="`rarity-${w.rarity}`">
+                      <img :src="getIconUrl(w.icon)" class="avatar-img" />
+                    </div>
+                    <div class="tile-weapon-text">
+                      <span class="tile-weapon-name">{{ w.name }}</span>
+                      <span class="tile-weapon-sub">{{ WEAPON_LABELS[w.weapon_type] || '' }} · {{ w.rarity }}★</span>
+                    </div>
+                  </button>
+
+                  <div v-if="modalFilteredWeapons.length === 0" class="empty-picker-text">
+                    Aucune arme trouvée.
                   </div>
-                </button>
-              </div>
+                </div>
+              </template>
             </div>
 
             <!-- Colonne Droite : Paramètres et Steppers -->
@@ -579,34 +781,92 @@ async function handleDeleteGoal() {
                 </div>
               </div>
 
-              <!-- Si Personnage : Steppers des Talents -->
+              <!-- Si Personnage : Steppers des Talents (Actuel et Objectif - Fini le rognage) -->
               <div v-if="modalForm.target_type === 'character'" class="param-group">
-                <span class="param-label">Objectif des Talents (1 à 10)</span>
-                <div class="steppers-grid three-grid">
-                  <div class="stepper-box">
-                    <span class="stepper-title">Att. normale</span>
-                    <div class="stepper-controls">
-                      <button type="button" class="btn-step" @click="stepTalent('talent_normal_target', -1)">−</button>
-                      <span class="stepper-val">{{ modalForm.talent_normal_target }}</span>
-                      <button type="button" class="btn-step" @click="stepTalent('talent_normal_target', 1)">+</button>
+                <div class="param-group-header">
+                  <span class="param-label">Aptitudes & Talents (1 à 10)</span>
+                  <span class="param-sub-label">Actuel → Objectif</span>
+                </div>
+                
+                <div class="talents-inputs-list">
+                  <!-- Attaque normale -->
+                  <div class="talent-row-card">
+                    <div class="talent-row-header">
+                      <span class="talent-bullet">🗡️</span>
+                      <span class="talent-name">Attaque normale</span>
+                    </div>
+                    <div class="talent-stepper-pair">
+                      <div class="mini-stepper">
+                        <span class="mini-step-label">Actuel</span>
+                        <div class="stepper-controls">
+                          <button type="button" class="btn-step" @click="stepTalent('talent_normal_current', -1)">−</button>
+                          <span class="stepper-val">{{ modalForm.talent_normal_current }}</span>
+                          <button type="button" class="btn-step" @click="stepTalent('talent_normal_current', 1)">+</button>
+                        </div>
+                      </div>
+                      <span class="stepper-arrow">→</span>
+                      <div class="mini-stepper">
+                        <span class="mini-step-label">Objectif</span>
+                        <div class="stepper-controls">
+                          <button type="button" class="btn-step" @click="stepTalent('talent_normal_target', -1)">−</button>
+                          <span class="stepper-val">{{ modalForm.talent_normal_target }}</span>
+                          <button type="button" class="btn-step" @click="stepTalent('talent_normal_target', 1)">+</button>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div class="stepper-box">
-                    <span class="stepper-title">Compétence (E)</span>
-                    <div class="stepper-controls">
-                      <button type="button" class="btn-step" @click="stepTalent('talent_skill_target', -1)">−</button>
-                      <span class="stepper-val">{{ modalForm.talent_skill_target }}</span>
-                      <button type="button" class="btn-step" @click="stepTalent('talent_skill_target', 1)">+</button>
+                  <!-- Compétence (E) -->
+                  <div class="talent-row-card">
+                    <div class="talent-row-header">
+                      <span class="talent-bullet">🌀</span>
+                      <span class="talent-name">Compétence (E)</span>
+                    </div>
+                    <div class="talent-stepper-pair">
+                      <div class="mini-stepper">
+                        <span class="mini-step-label">Actuel</span>
+                        <div class="stepper-controls">
+                          <button type="button" class="btn-step" @click="stepTalent('talent_skill_current', -1)">−</button>
+                          <span class="stepper-val">{{ modalForm.talent_skill_current }}</span>
+                          <button type="button" class="btn-step" @click="stepTalent('talent_skill_current', 1)">+</button>
+                        </div>
+                      </div>
+                      <span class="stepper-arrow">→</span>
+                      <div class="mini-stepper">
+                        <span class="mini-step-label">Objectif</span>
+                        <div class="stepper-controls">
+                          <button type="button" class="btn-step" @click="stepTalent('talent_skill_target', -1)">−</button>
+                          <span class="stepper-val">{{ modalForm.talent_skill_target }}</span>
+                          <button type="button" class="btn-step" @click="stepTalent('talent_skill_target', 1)">+</button>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div class="stepper-box">
-                    <span class="stepper-title">Burst (Q)</span>
-                    <div class="stepper-controls">
-                      <button type="button" class="btn-step" @click="stepTalent('talent_burst_target', -1)">−</button>
-                      <span class="stepper-val">{{ modalForm.talent_burst_target }}</span>
-                      <button type="button" class="btn-step" @click="stepTalent('talent_burst_target', 1)">+</button>
+                  <!-- Déchaînement (Q) -->
+                  <div class="talent-row-card">
+                    <div class="talent-row-header">
+                      <span class="talent-bullet">💥</span>
+                      <span class="talent-name">Déchaînement (Q)</span>
+                    </div>
+                    <div class="talent-stepper-pair">
+                      <div class="mini-stepper">
+                        <span class="mini-step-label">Actuel</span>
+                        <div class="stepper-controls">
+                          <button type="button" class="btn-step" @click="stepTalent('talent_burst_current', -1)">−</button>
+                          <span class="stepper-val">{{ modalForm.talent_burst_current }}</span>
+                          <button type="button" class="btn-step" @click="stepTalent('talent_burst_current', 1)">+</button>
+                        </div>
+                      </div>
+                      <span class="stepper-arrow">→</span>
+                      <div class="mini-stepper">
+                        <span class="mini-step-label">Objectif</span>
+                        <div class="stepper-controls">
+                          <button type="button" class="btn-step" @click="stepTalent('talent_burst_target', -1)">−</button>
+                          <span class="stepper-val">{{ modalForm.talent_burst_target }}</span>
+                          <button type="button" class="btn-step" @click="stepTalent('talent_burst_target', 1)">+</button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -614,15 +874,26 @@ async function handleDeleteGoal() {
 
               <!-- Si Personnage : Action sur les artéfacts -->
               <div v-if="modalForm.target_type === 'character'" class="param-group">
-                <span class="param-label">Action sur les artéfacts</span>
+                <div class="param-group-header">
+                  <span class="param-label">Action sur les artéfacts</span>
+                  <span class="param-sub-label">Optionnel</span>
+                </div>
                 <div class="artifact-actions-row">
                   <button
+                    type="button"
+                    :class="['tag-choice-btn', { active: !modalForm.artifact_action || modalForm.artifact_action === 'none' }]"
+                    @click="modalForm.artifact_action = 'none'"
+                  >
+                    🚫 Aucune action
+                  </button>
+                  <button
                     v-for="(cfg, key) in TAG_CONFIG"
+                    v-show="key !== 'none'"
                     :key="key"
                     type="button"
                     :class="['tag-choice-btn', { active: modalForm.artifact_action === key }]"
                     :style="modalForm.artifact_action === key ? { color: cfg.color, borderColor: cfg.color, background: `${cfg.color}15` } : {}"
-                    @click="modalForm.artifact_action = key"
+                    @click="modalForm.artifact_action = modalForm.artifact_action === key ? 'none' : key"
                   >
                     {{ cfg.label }}
                   </button>
@@ -941,6 +1212,35 @@ async function handleDeleteGoal() {
   text-decoration: line-through;
 }
 
+.check-row.static-achieved {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.check-achieved-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: rgba(124, 240, 208, 0.15);
+  color: #7CF0D0;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.check-value.achieved {
+  color: #7CF0D0;
+  font-size: 0.75rem;
+}
+
+.talents-badges.achieved .tal-badge {
+  color: #7CF0D0;
+  background: rgba(124, 240, 208, 0.08);
+  border-color: rgba(124, 240, 208, 0.3);
+}
+
 .empty-tier-box {
   padding: 2rem 1rem;
   text-align: center;
@@ -972,7 +1272,8 @@ async function handleDeleteGoal() {
 }
 
 .planner-dialog {
-  width: 980px;
+  width: 1060px;
+  max-width: 95vw;
   max-height: 92vh;
   background: #10131A;
   border: 1px solid #262B38;
@@ -1048,11 +1349,11 @@ async function handleDeleteGoal() {
 
 .dialog-layout {
   display: flex;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .dialog-pick-column {
-  width: 440px;
+  width: 430px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1066,11 +1367,93 @@ async function handleDeleteGoal() {
   color: #7A8296;
 }
 
+.modal-search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #0B0D12;
+  border: 1px solid #1F2430;
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+}
+
+.search-mini-icon {
+  color: #7CF0D0;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.modal-search-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #E7E9EE;
+  font-size: 0.85rem;
+  width: 100%;
+}
+
+.modal-filter-pills {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.modal-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #141821;
+  border: 1px solid #222734;
+  color: #8F97AA;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modal-filter-pill:hover {
+  border-color: #3A4256;
+  color: #E7E9EE;
+}
+
+.modal-filter-pill.active {
+  border-color: #7CF0D0;
+  color: #7CF0D0;
+  background: rgba(124, 240, 208, 0.1);
+}
+
+.filter-pill-el-icon {
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
+}
+
+.filter-pills-sep {
+  width: 1px;
+  height: 18px;
+  background: #262B38;
+  margin: 0 0.15rem;
+}
+
+.w-svg {
+  display: inline-block;
+}
+
+.empty-picker-text {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #6E768A;
+  font-size: 0.85rem;
+}
+
 .dialog-chars-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.5rem;
-  max-height: 380px;
+  max-height: 340px;
   overflow-y: auto;
   padding-right: 0.25rem;
 }
@@ -1089,17 +1472,37 @@ async function handleDeleteGoal() {
   transition: all 0.15s ease;
 }
 
+.dialog-char-tile:hover {
+  border-color: #3A4256;
+  background: #181E29;
+}
+
 .dialog-char-tile.active {
   border-color: #7CF0D0;
   background: rgba(124, 240, 208, 0.08);
 }
 
 .tile-avatar-wrap {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 2px solid;
   overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.char-mini-el {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(11, 13, 18, 0.85);
+  padding: 1px;
 }
 
 .tile-char-name {
@@ -1260,10 +1663,99 @@ async function handleDeleteGoal() {
   color: #E7E9EE;
 }
 
+.param-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.param-sub-label {
+  font-size: 0.68rem;
+  color: #7A8296;
+  font-weight: 600;
+}
+
+.talents-inputs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.talent-row-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  background: #0F1218;
+  border: 1px solid #1F2430;
+  gap: 0.5rem;
+  box-sizing: border-box;
+}
+
+.talent-row-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 125px;
+  flex-shrink: 0;
+}
+
+.talent-bullet {
+  font-size: 0.95rem;
+}
+
+.talent-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #E7E9EE;
+  white-space: nowrap;
+}
+
+.talent-stepper-pair {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.mini-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.mini-step-label {
+  font-size: 0.68rem;
+  color: #7A8296;
+  font-weight: 600;
+}
+
+.mini-stepper .stepper-controls {
+  gap: 0.25rem;
+}
+
+.mini-stepper .btn-step {
+  width: 26px;
+  height: 26px;
+  font-size: 0.85rem;
+}
+
+.mini-stepper .stepper-val {
+  width: 22px;
+  font-size: 0.82rem;
+}
+
+.stepper-arrow {
+  color: #7A8296;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
 .artifact-actions-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
 }
 
 .tag-choice-btn {

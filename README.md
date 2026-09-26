@@ -32,16 +32,23 @@ Mini dashboard personnel ultra-léger dédié à Genshin Impact, conçu pour tou
    - Alignement rigoureux des 4 fiches de personnages sur la même ligne de base.
 3. **Planificateur de Montée (Upgrade Planner)** :
    - Organisation par **Tiers de priorité** (🔥 Tier S, ⭐ Tier A, 💤 Tier B) avec filtres par nom, rareté, arme et élément.
-   - Objectifs détaillés : Niveau cible (ex: 80 → 90), Aptitudes (Normal / E / Q), Arme (Niv 90), Action artéfacts (🔄 Changement de set, ⬆️ Up +20, 🎯 Optimisation sous-stats, ✅ Prêt).
-   - Checkboxes interactives par palier atteint et calcul instantané de la progression.
+   - **Suivi précis des paliers d'aptitudes** : gestion des niveaux actuels et cibles pour l'Attaque Normale, la Compétence et le Déchaînement (ex: `1/8/8` → `6/9/10`) avec contrôles ergonomiques.
+   - **Progression adaptative intelligente** : calcul automatique et proportionnel du pourcentage d'achèvement en fonction des seuls objectifs actifs (niveau de personnage, aptitudes, et/ou action artéfacts).
+   - Objectifs détaillés : Niveau cible (ex: 80 → 90), Arme (Niv 90), Action artéfacts (🔄 Changement de set, ⬆️ Up +20, 🎯 Optimisation sous-stats, ✅ Prêt).
 4. **Endgame (Abysses & Carnage Chtonien)** :
    - Onglet **Profondeurs Spiralées** (2 équipes - 8 persos) et **Carnage Chtonien** (3 équipes - 12 persos).
-   - **Exclusion mutuelle stricte** : un personnage assigné dans une équipe ne peut pas être sélectionné dans une autre.
+   - **Disposition Split-View ergonomique** : équipes empilées verticalement à gauche (sans écrasement horizontal, même à 3 équipes en Carnage) et panneau de sélection de personnages **sticky** à droite avec recherche et filtres complets.
+   - **Exclusion mutuelle stricte** : détection et blocage en temps réel des doublons entre équipes.
+   - **Sélecteur officiel Étage 11 / Étage 12** pour les Abysses avec affichage des anomalies énergétiques et bénédictions officielles Yatta.
+   - **Sélecteur de builds harmonisé** : choix direct du loadout par simple clic sur l'avatar du slot (arme, raffinement R1–R5, artéfacts 2p/4p).
    - **Import express de presets** avec détection automatique des conflits.
-   - Vignettes d'équipements haute visibilité (32px) et affichage des anomalies énergétiques officielles du jeu.
-5. **Roadmap d'Invocations (Wishlist séquentielle)** :
-   - Organisation par Tiers de priorité (🔥 Tier S, ⭐ Tier A, 💤 Tier B) et granularité par pallier (Personnage C0 > Arme Signature R1 > C1 > etc.).
-   - Réordonnancement dynamique (Monter / Descendre) et suivi de statut (🎯 En cours, ✅ Obtenu).
+5. **Roadmap d'Invocations (Wishlist séquentielle & par Tiers)** :
+   - Organisation double vue : **Ordre séquentiel** (#1, #2...) et **Vue par Tiers** (🔥 Tier S, ⭐ Tier A, 💤 Tier B).
+   - Granularité par palier : Personnage C0 > Arme Signature R1 > Constellations C1 à C6.
+   - **Recherche en temps réel & filtres multi-critères** dans la modale d'ajout :
+     - Pour les personnages/constellations : recherche textuelle insensible à la casse et aux accents, filtre de possession (`★ Non possédés` pour de nouveaux personnages ou `★ Possédés` pour cibler des constellations), éléments avec insignes officiels Yatta, rareté (4★/5★) et types d'armes.
+     - Pour les armes : recherche textuelle, types d'armes avec icônes SVG et rareté (3★ à 5★).
+   - Réordonnancement dynamique instantané et suivi de statut (🎯 En cours, ✅ Obtenu).
 
 ---
 
@@ -58,7 +65,7 @@ npm run sync
 
 ### 2. Tests automatisés
 ```bash
-# Exécution de la suite de tests native (node:test)
+# Exécution de la suite de 15 tests natifs (node:test, node:assert)
 npm test
 ```
 

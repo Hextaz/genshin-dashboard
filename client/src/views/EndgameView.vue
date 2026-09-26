@@ -10,7 +10,8 @@ import {
   fetchEndgame,
   saveEndgame,
   fetchAbyssMeta,
-  normalizeElement
+  normalizeElement,
+  parseMainStats
 } from '../api.js';
 
 const props = defineProps({
@@ -48,6 +49,12 @@ const abyssMeta = ref(null);
 
 // Volet d'inspection de loadout escamotable (afficher / masquer)
 const inspectedSlot = ref(null); // { teamKey, slotIndex, character, loadout }
+
+// Statistiques principales formatées pour le volet d'inspection
+const parsedInspectedStats = computed(() => {
+  if (!inspectedSlot.value?.loadout?.main_stats) return null;
+  return parseMainStats(inspectedSlot.value.loadout.main_stats);
+});
 
 // Modale d'importation de preset
 const showImportModal = ref(false);
@@ -807,10 +814,24 @@ const filteredRoster = computed(() => {
           </div>
 
           <!-- Stats Principales -->
-          <div v-if="inspectedSlot.loadout.main_stats" class="drawer-section">
+          <div v-if="parsedInspectedStats" class="drawer-section">
             <span class="section-label">STATISTIQUES PRINCIPALES</span>
-            <div class="stats-preview-box">
-              <span class="stats-line">{{ inspectedSlot.loadout.main_stats }}</span>
+            <div class="stats-pills-row">
+              <div v-if="parsedInspectedStats.sands" class="stat-pill-chip">
+                <span class="stat-piece-icon">⏳</span>
+                <span class="stat-piece-label">Sablier</span>
+                <span class="stat-piece-val">{{ parsedInspectedStats.sands }}</span>
+              </div>
+              <div v-if="parsedInspectedStats.goblet" class="stat-pill-chip">
+                <span class="stat-piece-icon">🏆</span>
+                <span class="stat-piece-label">Coupe</span>
+                <span class="stat-piece-val">{{ parsedInspectedStats.goblet }}</span>
+              </div>
+              <div v-if="parsedInspectedStats.circlet" class="stat-pill-chip">
+                <span class="stat-piece-icon">👑</span>
+                <span class="stat-piece-label">Diadème</span>
+                <span class="stat-piece-val">{{ parsedInspectedStats.circlet }}</span>
+              </div>
             </div>
           </div>
 
@@ -1763,14 +1784,40 @@ const filteredRoster = computed(() => {
   gap: 0.4rem;
 }
 
-.stats-preview-box {
+.stats-pills-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.stat-pill-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   background: var(--bg-dark);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 0.5rem 0.7rem;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
+  padding: 0.45rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.stat-piece-icon {
+  font-size: 0.85rem;
+}
+
+.stat-piece-label {
+  font-weight: 700;
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 58px;
+}
+
+.stat-piece-val {
+  font-weight: 600;
+  color: var(--accent-mint);
+  margin-left: auto;
 }
 
 .drawer-notes-p {

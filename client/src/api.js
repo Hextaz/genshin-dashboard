@@ -104,6 +104,21 @@ export function getElementIconUrl(element) {
   return ELEMENT_OFFICIAL_ICONS[norm] || ELEMENT_OFFICIAL_ICONS[element] || '';
 }
 
+// Parseur sécurisé de statistiques principales (supporte le JSON direct ou double-sérialisé)
+export function parseMainStats(raw) {
+  if (!raw) return null;
+  try {
+    let res = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (typeof res === 'string') res = JSON.parse(res);
+    if (res && typeof res === 'object' && (res.sands || res.goblet || res.circlet)) {
+      return res;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 // Tracés SVG des éléments de la maquette
 export const ELEMENT_SVGS = {
   Pyro: 'M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .3 2 1.2 3 2.5 3.5C11 9 11 6 12 3z',

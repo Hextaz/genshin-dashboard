@@ -625,11 +625,6 @@ async function deleteEditorTeam() {
                 </div>
               </div>
             </div>
-
-            <!-- Stats principales -->
-            <div v-if="b.main_stats" class="build-stats-preview">
-              <span>Stats : {{ b.main_stats }}</span>
-            </div>
           </div>
 
           <div
@@ -1398,11 +1393,6 @@ async function deleteEditorTeam() {
   color: var(--accent-mint);
 }
 
-.build-stats-preview {
-  font-size: 0.72rem;
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-}
 
 .empty-picker-notice {
   text-align: center;

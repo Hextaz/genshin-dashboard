@@ -283,6 +283,27 @@ describe('Genshin Dashboard - Tests du Domaine & SQLite', () => {
     assert.equal(saved.weapon_id, 999001);
     assert.equal(saved.source, 'auto_detected');
   });
+
+  it('devrait parser et normaliser correctement les statistiques principales sans double sérialisation', async () => {
+    const { parseMainStats } = await import('../client/src/api.js');
+
+    // 1. Test avec objet direct
+    const objStats = { sands: "Recharge d'énergie %", goblet: "Bonus DGT Dendro %", circlet: "DGT CRIT %" };
+    assert.deepEqual(parseMainStats(objStats), objStats);
+
+    // 2. Test avec chaîne JSON standard
+    const jsonStr = JSON.stringify(objStats);
+    assert.deepEqual(parseMainStats(jsonStr), objStats);
+
+    // 3. Test avec chaîne doublement sérialisée (bug historique)
+    const doubleStr = JSON.stringify(jsonStr);
+    assert.deepEqual(parseMainStats(doubleStr), objStats);
+
+    // 4. Test avec valeurs nulles ou invalides
+    assert.equal(parseMainStats(null), null);
+    assert.equal(parseMainStats(''), null);
+    assert.equal(parseMainStats('invalid json'), null);
+  });
 });
 
 

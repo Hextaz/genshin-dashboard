@@ -10,8 +10,7 @@ import {
   fetchEndgame,
   saveEndgame,
   fetchAbyssMeta,
-  normalizeElement,
-  parseMainStats
+  normalizeElement
 } from '../api.js';
 
 const props = defineProps({
@@ -64,15 +63,6 @@ const saving = ref(false);
 const saveSuccess = ref(false);
 
 const abyssMeta = ref(null);
-
-// Volet d'inspection de loadout escamotable (afficher / masquer)
-const inspectedSlot = ref(null); // { teamKey, slotIndex, character, loadout }
-
-// Statistiques principales formatées pour le volet d'inspection
-const parsedInspectedStats = computed(() => {
-  if (!inspectedSlot.value?.loadout?.main_stats) return null;
-  return parseMainStats(inspectedSlot.value.loadout.main_stats);
-});
 
 // Modale d'importation de preset
 const showImportModal = ref(false);
@@ -154,7 +144,6 @@ async function loadEndgameSetup() {
 
 watch(currentMode, () => {
   activeSlot.value = { teamKey: 'team1', slotIndex: 0 };
-  inspectedSlot.value = null;
   loadEndgameSetup();
 });
 
@@ -234,9 +223,6 @@ function selectSlot(teamKey, index) {
 
 function clearSlot(teamKey, index) {
   setup.value[teamKey][index] = null;
-  if (inspectedSlot.value?.teamKey === teamKey && inspectedSlot.value?.slotIndex === index) {
-    inspectedSlot.value = null;
-  }
   handleAutoSave();
 }
 
@@ -257,21 +243,6 @@ function applyBuildForSlot(buildId) {
   setup.value[teamKey][slotIndex].loadout_id = buildId;
   activeBuildPicker.value = null;
   handleAutoSave();
-}
-
-function toggleInspectSlot(teamKey, index) {
-  const slot = setup.value[teamKey][index];
-  if (!slot?.character_id) return;
-  if (inspectedSlot.value && inspectedSlot.value.teamKey === teamKey && inspectedSlot.value.slotIndex === index) {
-    inspectedSlot.value = null; // Recliquer masque le volet
-  } else {
-    inspectedSlot.value = {
-      teamKey,
-      slotIndex: index,
-      character: charactersMap.value[slot.character_id],
-      loadout: loadoutsMap.value[slot.loadout_id] || null
-    };
-  }
 }
 
 function pickCharacterFromRoster(char) {
@@ -311,9 +282,6 @@ function swapTeams12() {
 
 function clearEntireTeam(teamKey) {
   setup.value[teamKey] = [null, null, null, null];
-  if (inspectedSlot.value?.teamKey === teamKey) {
-    inspectedSlot.value = null;
-  }
   handleAutoSave();
 }
 
@@ -510,7 +478,7 @@ const filteredRoster = computed(() => {
       </div>
     </div>
 
-    <!-- Disposition Équipes + Volet d'Inspection Escamotable -->
+    <!-- Disposition Équipes & Roster -->
     <div class="endgame-main-layout">
       <div class="endgame-columns-area">
         <!-- Colonnes des Équipes (2 colonnes pour Abysses, 3 pour Carnage) -->
@@ -552,8 +520,7 @@ const filteredRoster = computed(() => {
                   'slot-card',
                   {
                     active: activeSlot.teamKey === teamKey && activeSlot.slotIndex === sIdx,
-                    duplicate: slot && characterTeamOwners[slot.character_id]?.[0] < tIdx,
-                    inspected: inspectedSlot && inspectedSlot.teamKey === teamKey && inspectedSlot.slotIndex === sIdx
+                    duplicate: slot && characterTeamOwners[slot.character_id]?.[0] < tIdx
                   }
                 ]"
                 @click="selectSlot(teamKey, sIdx)"
@@ -571,21 +538,8 @@ const filteredRoster = computed(() => {
 
                 <!-- Slot avec personnage -->
                 <template v-if="slot && charactersMap[slot.character_id]">
-                  <!-- Bouton Inspecter les stats et build (en haut à gauche) -->
-                  <button
-                    type="button"
-                    :class="['btn-inspect-avatar', { active: inspectedSlot && inspectedSlot.teamKey === teamKey && inspectedSlot.slotIndex === sIdx }]"
-                    title="Inspecter les stats et équipements"
-                    @click.stop="toggleInspectSlot(teamKey, sIdx)"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  </button>
-
-                  <!-- Avatar du personnage avec anneau coloré & badge élément -->
-                  <div class="slot-avatar-container" @click.stop="toggleInspectSlot(teamKey, sIdx)" title="Cliquer pour inspecter les détails">
+                  <!-- Avatar du personnage avec anneau coloré & badge élément (cliquable pour changer de build) -->
+                  <div class="slot-avatar-container" @click.stop="openBuildPickerEndgame(teamKey, sIdx)" title="Cliquer pour changer de build">
                     <div
                       class="avatar-circle-ring"
                       :style="{
@@ -864,105 +818,6 @@ const filteredRoster = computed(() => {
         </div>
       </div>
 
-      <!-- ============================================================= -->
-      <!-- VOLET D'INSPECTION ESCAMOTABLE DU LOADOUT (DEMANDE UTILISATEUR) -->
-      <!-- ============================================================= -->
-      <aside v-if="inspectedSlot" class="inspected-loadout-drawer">
-        <div class="drawer-top">
-          <div class="drawer-char-summary">
-            <div
-              class="drawer-char-ring"
-              :style="{ borderColor: ELEMENT_COLORS[inspectedSlot.character.element] }"
-            >
-              <img :src="getIconUrl(inspectedSlot.character.icon)" class="avatar-img" />
-            </div>
-            <div>
-              <h3 class="drawer-char-name">{{ inspectedSlot.character.name }}</h3>
-              <span class="drawer-char-sub">
-                {{ inspectedSlot.teamKey === 'team1' ? 'Team 1' : (inspectedSlot.teamKey === 'team2' ? 'Team 2' : 'Team 3') }} · Slot {{ inspectedSlot.slotIndex + 1 }}
-              </span>
-            </div>
-          </div>
-
-          <button type="button" class="btn-close-drawer" @click="inspectedSlot = null">✕</button>
-        </div>
-
-        <div v-if="inspectedSlot.loadout" class="drawer-content">
-          <div class="drawer-section">
-            <span class="section-label">NOM DU BUILD</span>
-            <div class="drawer-pill-highlight">
-              <strong>{{ inspectedSlot.loadout.name }}</strong>
-            </div>
-          </div>
-
-          <!-- Détail Arme -->
-          <div class="drawer-section">
-            <span class="section-label">ARME ÉQUIPÉE</span>
-            <div v-if="weaponsMap[inspectedSlot.loadout.weapon_id]" class="drawer-equipment-card">
-              <img :src="getIconUrl(weaponsMap[inspectedSlot.loadout.weapon_id].icon)" class="drawer-equip-img" />
-              <div class="drawer-equip-text">
-                <span class="drawer-equip-name">{{ weaponsMap[inspectedSlot.loadout.weapon_id].name }}</span>
-                <span class="drawer-equip-sub">Raffinement R{{ inspectedSlot.loadout.weapon_refinement || 1 }}</span>
-              </div>
-            </div>
-            <span v-else class="text-dim-hint">Aucune arme assignée</span>
-          </div>
-
-          <!-- Détail Artéfacts -->
-          <div class="drawer-section">
-            <span class="section-label">SETS D'ARTÉFACTS</span>
-            <div class="drawer-relics-list">
-              <div v-if="relicsMap[inspectedSlot.loadout.artifact_set_1_id]" class="drawer-equipment-card">
-                <img :src="getIconUrl(relicsMap[inspectedSlot.loadout.artifact_set_1_id].icon)" class="drawer-equip-img" />
-                <div class="drawer-equip-text">
-                  <span class="drawer-equip-name">{{ relicsMap[inspectedSlot.loadout.artifact_set_1_id].name }}</span>
-                  <span class="drawer-equip-sub">{{ inspectedSlot.loadout.artifact_set_2_id ? 'Bonus 2 pièces' : 'Bonus 4 pièces' }}</span>
-                </div>
-              </div>
-
-              <div v-if="inspectedSlot.loadout.artifact_set_2_id && relicsMap[inspectedSlot.loadout.artifact_set_2_id]" class="drawer-equipment-card">
-                <img :src="getIconUrl(relicsMap[inspectedSlot.loadout.artifact_set_2_id].icon)" class="drawer-equip-img" />
-                <div class="drawer-equip-text">
-                  <span class="drawer-equip-name">{{ relicsMap[inspectedSlot.loadout.artifact_set_2_id].name }}</span>
-                  <span class="drawer-equip-sub">Bonus 2 pièces</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Stats Principales -->
-          <div v-if="parsedInspectedStats" class="drawer-section">
-            <span class="section-label">STATISTIQUES PRINCIPALES</span>
-            <div class="stats-pills-row">
-              <div v-if="parsedInspectedStats.sands" class="stat-pill-chip">
-                <span class="stat-piece-icon">⏳</span>
-                <span class="stat-piece-label">Sablier</span>
-                <span class="stat-piece-val">{{ parsedInspectedStats.sands }}</span>
-              </div>
-              <div v-if="parsedInspectedStats.goblet" class="stat-pill-chip">
-                <span class="stat-piece-icon">🏆</span>
-                <span class="stat-piece-label">Coupe</span>
-                <span class="stat-piece-val">{{ parsedInspectedStats.goblet }}</span>
-              </div>
-              <div v-if="parsedInspectedStats.circlet" class="stat-pill-chip">
-                <span class="stat-piece-icon">👑</span>
-                <span class="stat-piece-label">Diadème</span>
-                <span class="stat-piece-val">{{ parsedInspectedStats.circlet }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Notes de build -->
-          <div v-if="inspectedSlot.loadout.notes" class="drawer-section">
-            <span class="section-label">NOTES</span>
-            <p class="drawer-notes-p">{{ inspectedSlot.loadout.notes }}</p>
-          </div>
-        </div>
-
-        <div v-else class="drawer-empty-notice">
-          <p>Aucun build personnalisé associé à ce personnage.</p>
-        </div>
-      </aside>
     </div>
 
     <!-- ============================================================= -->
@@ -1039,7 +894,7 @@ const filteredRoster = computed(() => {
     </div>
 
     <!-- ============================================================= -->
-    <!-- MODALE SÉLECTION DE BUILD DANS ENDGAME -->
+    <!-- MODALE SÉLECTION DE BUILD DANS ENDGAME (IDENTIQUE AUX PRESETS) -->
     <!-- ============================================================= -->
     <div
       v-if="activeBuildPicker"
@@ -1053,11 +908,11 @@ const filteredRoster = computed(() => {
               class="picker-char-ring"
               :style="{ borderColor: ELEMENT_COLORS[activeBuildPicker.character?.element] }"
             >
-              <img :src="getIconUrl(activeBuildPicker.character?.icon)" class="avatar-img" />
+              <img :src="getIconUrl(activeBuildPicker.character?.icon)" class="picker-char-img" />
             </div>
             <div>
-              <h3 class="picker-title">Changer le build de {{ activeBuildPicker.character?.name }}</h3>
-              <span class="picker-sub">Pour ce slot de {{ activeBuildPicker.teamKey === 'team1' ? 'Team 1' : 'Team 2' }}</span>
+              <h3 class="picker-title">Choisir un build pour {{ activeBuildPicker.character?.name }}</h3>
+              <span class="picker-sub">Sélectionnez le loadout avec ses armes et artéfacts associés</span>
             </div>
           </div>
 
@@ -1072,26 +927,42 @@ const filteredRoster = computed(() => {
             @click="applyBuildForSlot(b.id)"
           >
             <div class="build-option-top">
-              <span class="build-option-name">{{ b.name }}</span>
+              <div class="build-option-name-wrap">
+                <span class="build-option-name">{{ b.name }}</span>
+                <span v-if="activeBuildPicker.currentLoadoutId === b.id" class="active-badge">✓ Actif</span>
+              </div>
+
               <button type="button" class="btn-apply-build">
-                {{ activeBuildPicker.currentLoadoutId === b.id ? '✓ Actif' : 'Sélectionner' }}
+                {{ activeBuildPicker.currentLoadoutId === b.id ? 'Sélectionné' : 'Choisir ce build' }}
               </button>
             </div>
 
+            <!-- Équipements de ce build avec vraies images -->
             <div class="build-gear-row">
+              <!-- Arme -->
               <div v-if="weaponsMap[b.weapon_id]" class="gear-detail-pill">
                 <img :src="getIconUrl(weaponsMap[b.weapon_id].icon)" class="gear-detail-img" />
                 <div class="gear-detail-info">
                   <span class="gear-title">{{ weaponsMap[b.weapon_id].name }}</span>
-                  <span class="gear-meta">R{{ b.weapon_refinement || 1 }}</span>
+                  <span class="gear-meta">Raffinement R{{ b.weapon_refinement || 1 }}</span>
                 </div>
               </div>
 
+              <!-- Artéfact Set 1 -->
               <div v-if="relicsMap[b.artifact_set_1_id]" class="gear-detail-pill">
                 <img :src="getIconUrl(relicsMap[b.artifact_set_1_id].icon)" class="gear-detail-img" />
                 <div class="gear-detail-info">
                   <span class="gear-title">{{ relicsMap[b.artifact_set_1_id].name }}</span>
-                  <span class="gear-meta">{{ b.artifact_set_2_id ? '2p' : '4p' }}</span>
+                  <span class="gear-meta">{{ b.artifact_set_2_id ? 'Bonus 2 pièces' : 'Bonus 4 pièces' }}</span>
+                </div>
+              </div>
+
+              <!-- Artéfact Set 2 (si 2+2) -->
+              <div v-if="b.artifact_set_2_id && relicsMap[b.artifact_set_2_id]" class="gear-detail-pill">
+                <img :src="getIconUrl(relicsMap[b.artifact_set_2_id].icon)" class="gear-detail-img" />
+                <div class="gear-detail-info">
+                  <span class="gear-title">{{ relicsMap[b.artifact_set_2_id].name }}</span>
+                  <span class="gear-meta">Bonus 2 pièces</span>
                 </div>
               </div>
             </div>
@@ -1101,7 +972,8 @@ const filteredRoster = computed(() => {
             v-if="getLoadoutsForCharacter(activeBuildPicker.character ? Number(activeBuildPicker.character.id.replace('avatar_', '')) : 0).length === 0"
             class="empty-picker-notice"
           >
-            <p>Aucun build alternatif pour ce personnage.</p>
+            <p>Aucun build n'est encore configuré pour {{ activeBuildPicker.character?.name }}.</p>
+            <span>Rendez-vous dans l'onglet <strong>Personnages & Builds</strong> pour lui assigner une arme et des artéfacts.</span>
           </div>
         </div>
       </div>
@@ -1399,10 +1271,6 @@ const filteredRoster = computed(() => {
   box-shadow: 0 0 14px rgba(124, 240, 208, 0.25);
 }
 
-.slot-card.inspected {
-  border-color: var(--accent-gold);
-}
-
 .slot-card.duplicate {
   border-color: #ff5a36;
   background: rgba(255, 90, 54, 0.08);
@@ -1431,31 +1299,6 @@ const filteredRoster = computed(() => {
   background: rgba(255, 90, 54, 0.2);
   color: #ff5a36;
   border-color: #ff5a36;
-}
-
-.btn-inspect-avatar {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--bg-dark);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-dim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 2;
-  transition: all 0.15s ease;
-}
-
-.btn-inspect-avatar:hover,
-.btn-inspect-avatar.active {
-  color: var(--accent-gold);
-  border-color: var(--accent-gold);
-  background: rgba(243, 197, 82, 0.15);
 }
 
 .slot-avatar-container {
@@ -1966,166 +1809,182 @@ const filteredRoster = computed(() => {
   color: var(--accent-mint);
 }
 
-/* ================= VOLET D'INSPECTION ESCAMOTABLE ================= */
-.inspected-loadout-drawer {
-  width: 320px;
+/* ================= MODALE DE SÉLECTION DU BUILD (IDENTIQUE AUX PRESETS) ================= */
+.build-picker-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: 1.25rem;
+  width: 100%;
+  max-width: 620px;
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
 }
 
-.drawer-top {
+.picker-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.drawer-char-summary {
+.picker-char-summary {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.9rem;
 }
 
-.drawer-char-ring {
-  width: 42px;
-  height: 42px;
+.picker-char-ring {
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   border: 2px solid;
   overflow: hidden;
+  background: var(--bg-dark);
 }
 
-.drawer-char-name {
+.picker-char-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.picker-title {
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: var(--text-main);
 }
 
-.drawer-char-sub {
-  font-size: 0.72rem;
+.picker-sub {
+  font-size: 0.78rem;
   color: var(--text-dim);
 }
 
-.btn-close-drawer {
+.btn-close-modal {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   cursor: pointer;
+  padding: 0.4rem;
 }
 
-.drawer-content {
+.picker-builds-list {
+  padding: 1.25rem 1.5rem;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.drawer-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.section-label {
-  font-size: 0.68rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-dim);
-}
-
-.drawer-pill-highlight {
-  background: #172425;
-  color: var(--accent-mint);
-  border: 1px solid rgba(124, 240, 208, 0.3);
-  padding: 0.4rem 0.75rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-}
-
-.drawer-equipment-card {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
+.build-option-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-.drawer-equip-img {
-  width: 34px;
-  height: 34px;
+.build-option-card:hover {
+  border-color: var(--accent-mint);
+  transform: translateY(-2px);
+}
+
+.build-option-card.active {
+  border-color: var(--accent-mint);
+  box-shadow: 0 0 0 1px var(--accent-mint), 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+.build-option-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.build-option-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.build-option-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-main);
+}
+
+.active-badge {
+  background: #172425;
+  color: var(--accent-mint);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.btn-apply-build {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.build-gear-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.gear-detail-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.6rem;
+}
+
+.gear-detail-img {
+  width: 32px;
+  height: 32px;
   border-radius: 4px;
   object-fit: cover;
   background: var(--bg-dark);
 }
 
-.drawer-equip-name {
+.gear-detail-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.gear-title {
   font-size: 0.78rem;
   font-weight: 700;
   color: var(--text-main);
 }
 
-.drawer-equip-sub {
+.gear-meta {
   font-size: 0.68rem;
   color: var(--accent-mint);
 }
 
-.drawer-relics-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.stats-pills-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.stat-pill-chip {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  background: var(--bg-dark);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 0.45rem 0.7rem;
-  font-size: 0.78rem;
-}
-
-.stat-piece-icon {
-  font-size: 0.85rem;
-}
-
-.stat-piece-label {
-  font-weight: 700;
+.empty-picker-notice {
+  text-align: center;
+  padding: 2rem;
   color: var(--text-dim);
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  min-width: 58px;
-}
-
-.stat-piece-val {
-  font-weight: 600;
-  color: var(--accent-mint);
-  margin-left: auto;
-}
-
-.drawer-notes-p {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  background: var(--bg-dark);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem 0.7rem;
 }
 
 /* ================= MODALE IMPORTER PRESET ================= */
@@ -2276,9 +2135,6 @@ const filteredRoster = computed(() => {
   }
   .endgame-main-layout {
     flex-direction: column;
-  }
-  .inspected-loadout-drawer {
-    width: 100%;
   }
 }
 </style>

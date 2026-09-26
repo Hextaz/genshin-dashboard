@@ -1272,7 +1272,8 @@ async function handleDeleteGoal() {
 }
 
 .planner-dialog {
-  width: 980px;
+  width: 1060px;
+  max-width: 95vw;
   max-height: 92vh;
   background: #10131A;
   border: 1px solid #262B38;
@@ -1348,11 +1349,11 @@ async function handleDeleteGoal() {
 
 .dialog-layout {
   display: flex;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .dialog-pick-column {
-  width: 460px;
+  width: 430px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1684,18 +1685,20 @@ async function handleDeleteGoal() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0.75rem;
+  padding: 0.45rem 0.65rem;
   border-radius: 8px;
   background: #0F1218;
   border: 1px solid #1F2430;
   gap: 0.5rem;
+  box-sizing: border-box;
 }
 
 .talent-row-header {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  min-width: 140px;
+  min-width: 125px;
+  flex-shrink: 0;
 }
 
 .talent-bullet {
@@ -1712,7 +1715,8 @@ async function handleDeleteGoal() {
 .talent-stepper-pair {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .mini-stepper {
@@ -1725,6 +1729,21 @@ async function handleDeleteGoal() {
   font-size: 0.68rem;
   color: #7A8296;
   font-weight: 600;
+}
+
+.mini-stepper .stepper-controls {
+  gap: 0.25rem;
+}
+
+.mini-stepper .btn-step {
+  width: 26px;
+  height: 26px;
+  font-size: 0.85rem;
+}
+
+.mini-stepper .stepper-val {
+  width: 22px;
+  font-size: 0.82rem;
 }
 
 .stepper-arrow {

@@ -130,6 +130,7 @@ onMounted(() => {
           :loadouts="loadouts"
           :weapons="weapons"
           :reliquaries="reliquaries"
+          :ownership="ownership"
         />
 
         <!-- Vue 5: Roadmap Vœux -->

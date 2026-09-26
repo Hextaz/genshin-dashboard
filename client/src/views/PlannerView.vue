@@ -4,8 +4,10 @@ import {
   getIconUrl,
   ELEMENT_COLORS,
   ELEMENT_LABELS,
+  getElementIconUrl,
   WEAPON_LABELS,
   WEAPON_SVGS,
+  normalizeElement,
   fetchPlanner,
   createPlannerItem,
   updatePlannerItem,
@@ -152,8 +154,55 @@ const modalForm = ref({
   is_artifacts_done: 0
 });
 
+const charSearchQuery = ref('');
+const charElementFilter = ref('ALL');
+const charRarityFilter = ref('ALL');
+const weaponSearchQuery = ref('');
+const weaponTypeFilter = ref('ALL');
+const weaponRarityFilter = ref('ALL');
+
+const weaponsTypesList = ['ALL', 'WEAPON_SWORD_ONE_HAND', 'WEAPON_CLAYMORE', 'WEAPON_POLE', 'WEAPON_BOW', 'WEAPON_CATALYST'];
+
+const modalFilteredCharacters = computed(() => {
+  return props.characters.filter(c => {
+    if (charElementFilter.value !== 'ALL') {
+      if (normalizeElement(c.element) !== normalizeElement(charElementFilter.value)) return false;
+    }
+    if (charRarityFilter.value !== 'ALL') {
+      if (c.rarity !== Number(charRarityFilter.value)) return false;
+    }
+    if (charSearchQuery.value.trim()) {
+      const q = charSearchQuery.value.toLowerCase().trim();
+      if (!c.name.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+});
+
+const modalFilteredWeapons = computed(() => {
+  return props.weapons.filter(w => {
+    if (weaponTypeFilter.value !== 'ALL') {
+      if (w.weapon_type !== weaponTypeFilter.value) return false;
+    }
+    if (weaponRarityFilter.value !== 'ALL') {
+      if (w.rarity !== Number(weaponRarityFilter.value)) return false;
+    }
+    if (weaponSearchQuery.value.trim()) {
+      const q = weaponSearchQuery.value.toLowerCase().trim();
+      if (!w.name.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+});
+
 function openNewGoal(tierId = 'S') {
   editingItemId.value = null;
+  charSearchQuery.value = '';
+  charElementFilter.value = 'ALL';
+  charRarityFilter.value = 'ALL';
+  weaponSearchQuery.value = '';
+  weaponTypeFilter.value = 'ALL';
+  weaponRarityFilter.value = 'ALL';
   const defChar = props.characters[0];
   const rawCharId = defChar ? Number(defChar.id.replace('avatar_', '')) : null;
   const defRelic = props.reliquaries[0];
@@ -187,6 +236,12 @@ function openNewGoal(tierId = 'S') {
 
 function openEditGoal(item) {
   editingItemId.value = item.id;
+  charSearchQuery.value = '';
+  charElementFilter.value = 'ALL';
+  charRarityFilter.value = 'ALL';
+  weaponSearchQuery.value = '';
+  weaponTypeFilter.value = 'ALL';
+  weaponRarityFilter.value = 'ALL';
   modalForm.value = {
     ...item,
     weapon_refinement: item.weapon_refinement || 1,
@@ -500,40 +555,129 @@ async function handleDeleteGoal() {
                 {{ modalForm.target_type === 'character' ? 'Choisir un personnage' : 'Choisir une arme' }}
               </span>
 
-              <!-- Grille des personnages à cliquer -->
-              <div v-if="modalForm.target_type === 'character'" class="dialog-chars-grid scroll">
-                <button
-                  v-for="c in characters"
-                  :key="c.id"
-                  type="button"
-                  :class="['dialog-char-tile', { active: modalForm.character_id === Number(c.id.replace('avatar_', '')) }]"
-                  @click="selectCharacterInModal(c)"
-                >
-                  <div class="tile-avatar-wrap" :style="{ borderColor: ELEMENT_COLORS[c.element] }">
-                    <img :src="getIconUrl(c.icon)" class="avatar-img" />
-                  </div>
-                  <span class="tile-char-name">{{ c.name }}</span>
-                </button>
-              </div>
+              <!-- Cas 1 : Sélection Personnage avec Recherche & Filtres Éléments -->
+              <template v-if="modalForm.target_type === 'character'">
+                <div class="modal-search-box">
+                  <svg class="search-mini-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <input
+                    v-model="charSearchQuery"
+                    type="search"
+                    placeholder="Rechercher un personnage..."
+                    class="modal-search-input"
+                  />
+                </div>
 
-              <!-- Grille des armes à cliquer -->
-              <div v-else class="dialog-weapons-grid scroll">
-                <button
-                  v-for="w in weapons"
-                  :key="w.id"
-                  type="button"
-                  :class="['dialog-weapon-tile', { active: modalForm.weapon_id === Number(w.id.replace('weapon_', '')) }]"
-                  @click="selectWeaponInModal(w)"
-                >
-                  <div class="tile-weapon-icon" :class="`rarity-${w.rarity}`">
-                    <img :src="getIconUrl(w.icon)" class="avatar-img" />
+                <div class="modal-filter-pills">
+                  <button
+                    v-for="el in ['ALL', 'Pyro', 'Hydro', 'Anemo', 'Electro', 'Dendro', 'Cryo', 'Geo']"
+                    :key="el"
+                    type="button"
+                    :class="['modal-filter-pill', { active: charElementFilter === el }]"
+                    @click="charElementFilter = el"
+                  >
+                    <img v-if="el !== 'ALL'" :src="getElementIconUrl(el)" class="filter-pill-el-icon" />
+                    <span>{{ el === 'ALL' ? 'Tous' : (ELEMENT_LABELS[el] || el) }}</span>
+                  </button>
+                  <div class="filter-pills-sep"></div>
+                  <button
+                    v-for="r in ['ALL', '5', '4']"
+                    :key="r"
+                    type="button"
+                    :class="['modal-filter-pill', { active: charRarityFilter === r }]"
+                    @click="charRarityFilter = r"
+                  >
+                    {{ r === 'ALL' ? 'Toutes' : `${r}★` }}
+                  </button>
+                </div>
+
+                <!-- Grille des personnages à cliquer -->
+                <div class="dialog-chars-grid scroll">
+                  <button
+                    v-for="c in modalFilteredCharacters"
+                    :key="c.id"
+                    type="button"
+                    :class="['dialog-char-tile', { active: modalForm.character_id === Number(c.id.replace('avatar_', '')) }]"
+                    @click="selectCharacterInModal(c)"
+                  >
+                    <div class="tile-avatar-wrap" :style="{ borderColor: ELEMENT_COLORS[c.element] || '#7CF0D0' }">
+                      <img :src="getIconUrl(c.icon)" class="avatar-img" />
+                      <img :src="getElementIconUrl(c.element)" class="char-mini-el" />
+                    </div>
+                    <span class="tile-char-name">{{ c.name }}</span>
+                  </button>
+
+                  <div v-if="modalFilteredCharacters.length === 0" class="empty-picker-text">
+                    Aucun personnage trouvé.
                   </div>
-                  <div class="tile-weapon-text">
-                    <span class="tile-weapon-name">{{ w.name }}</span>
-                    <span class="tile-weapon-sub">{{ WEAPON_LABELS[w.weapon_type] || '' }}</span>
+                </div>
+              </template>
+
+              <!-- Cas 2 : Sélection Arme avec Recherche & Filtres Type d'Arme -->
+              <template v-else>
+                <div class="modal-search-box">
+                  <svg class="search-mini-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <input
+                    v-model="weaponSearchQuery"
+                    type="search"
+                    placeholder="Rechercher une arme..."
+                    class="modal-search-input"
+                  />
+                </div>
+
+                <div class="modal-filter-pills">
+                  <button
+                    v-for="wType in weaponsTypesList"
+                    :key="wType"
+                    type="button"
+                    :class="['modal-filter-pill', { active: weaponTypeFilter === wType }]"
+                    @click="weaponTypeFilter = wType"
+                  >
+                    <svg v-if="wType !== 'ALL'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-svg">
+                      <path :d="WEAPON_SVGS[wType]" />
+                    </svg>
+                    <span>{{ wType === 'ALL' ? 'Toutes armes' : (WEAPON_LABELS[wType] || wType) }}</span>
+                  </button>
+                  <div class="filter-pills-sep"></div>
+                  <button
+                    v-for="r in ['ALL', '5', '4', '3']"
+                    :key="r"
+                    type="button"
+                    :class="['modal-filter-pill', { active: weaponRarityFilter === r }]"
+                    @click="weaponRarityFilter = r"
+                  >
+                    {{ r === 'ALL' ? 'Toutes' : `${r}★` }}
+                  </button>
+                </div>
+
+                <!-- Grille des armes à cliquer -->
+                <div class="dialog-weapons-grid scroll">
+                  <button
+                    v-for="w in modalFilteredWeapons"
+                    :key="w.id"
+                    type="button"
+                    :class="['dialog-weapon-tile', { active: modalForm.weapon_id === Number(w.id.replace('weapon_', '')) }]"
+                    @click="selectWeaponInModal(w)"
+                  >
+                    <div class="tile-weapon-icon" :class="`rarity-${w.rarity}`">
+                      <img :src="getIconUrl(w.icon)" class="avatar-img" />
+                    </div>
+                    <div class="tile-weapon-text">
+                      <span class="tile-weapon-name">{{ w.name }}</span>
+                      <span class="tile-weapon-sub">{{ WEAPON_LABELS[w.weapon_type] || '' }} · {{ w.rarity }}★</span>
+                    </div>
+                  </button>
+
+                  <div v-if="modalFilteredWeapons.length === 0" class="empty-picker-text">
+                    Aucune arme trouvée.
                   </div>
-                </button>
-              </div>
+                </div>
+              </template>
             </div>
 
             <!-- Colonne Droite : Paramètres et Steppers -->
@@ -1052,7 +1196,7 @@ async function handleDeleteGoal() {
 }
 
 .dialog-pick-column {
-  width: 440px;
+  width: 460px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1066,11 +1210,93 @@ async function handleDeleteGoal() {
   color: #7A8296;
 }
 
+.modal-search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #0B0D12;
+  border: 1px solid #1F2430;
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+}
+
+.search-mini-icon {
+  color: #7CF0D0;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.modal-search-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #E7E9EE;
+  font-size: 0.85rem;
+  width: 100%;
+}
+
+.modal-filter-pills {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.modal-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #141821;
+  border: 1px solid #222734;
+  color: #8F97AA;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modal-filter-pill:hover {
+  border-color: #3A4256;
+  color: #E7E9EE;
+}
+
+.modal-filter-pill.active {
+  border-color: #7CF0D0;
+  color: #7CF0D0;
+  background: rgba(124, 240, 208, 0.1);
+}
+
+.filter-pill-el-icon {
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
+}
+
+.filter-pills-sep {
+  width: 1px;
+  height: 18px;
+  background: #262B38;
+  margin: 0 0.15rem;
+}
+
+.w-svg {
+  display: inline-block;
+}
+
+.empty-picker-text {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #6E768A;
+  font-size: 0.85rem;
+}
+
 .dialog-chars-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.5rem;
-  max-height: 380px;
+  max-height: 340px;
   overflow-y: auto;
   padding-right: 0.25rem;
 }
@@ -1089,17 +1315,37 @@ async function handleDeleteGoal() {
   transition: all 0.15s ease;
 }
 
+.dialog-char-tile:hover {
+  border-color: #3A4256;
+  background: #181E29;
+}
+
 .dialog-char-tile.active {
   border-color: #7CF0D0;
   background: rgba(124, 240, 208, 0.08);
 }
 
 .tile-avatar-wrap {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 2px solid;
   overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.char-mini-el {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(11, 13, 18, 0.85);
+  padding: 1px;
 }
 
 .tile-char-name {

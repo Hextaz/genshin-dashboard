@@ -193,5 +193,54 @@ describe('Genshin Dashboard - Tests du Domaine & SQLite', () => {
     const updatedTierS = db.prepare("SELECT * FROM test_wish_roadmap WHERE priority_tier = 'S'").all();
     assert.equal(updatedTierS.length, 2);
   });
+
+  it('devrait normaliser canoniquement tous les éléments même avec accents (Anémo, Électro, Géo)', async () => {
+    const { normalizeElement } = await import('../client/src/api.js');
+    assert.equal(normalizeElement('Anemo'), 'Anemo');
+    assert.equal(normalizeElement('Anémo'), 'Anemo');
+    assert.equal(normalizeElement('Wind'), 'Anemo');
+    assert.equal(normalizeElement('Electro'), 'Electro');
+    assert.equal(normalizeElement('Électro'), 'Electro');
+    assert.equal(normalizeElement('Electric'), 'Electro');
+    assert.equal(normalizeElement('Geo'), 'Geo');
+    assert.equal(normalizeElement('Géo'), 'Geo');
+    assert.equal(normalizeElement('Rock'), 'Geo');
+    assert.equal(normalizeElement('Pyro'), 'Pyro');
+    assert.equal(normalizeElement('Fire'), 'Pyro');
+  });
+
+  it('devrait permettre de supprimer le seul et unique build d\'un personnage', () => {
+    db.prepare(`
+      INSERT INTO character_loadouts (id, character_id, character_name, name)
+      VALUES (?, ?, ?, ?)
+    `).run('only-build', 999999, 'Test Char', 'Single Build');
+
+    let count = db.prepare('SELECT COUNT(*) as c FROM character_loadouts WHERE character_id = ?').get(999999);
+    assert.equal(count.c, 1);
+
+    // Suppression de l'unique build
+    db.prepare('DELETE FROM character_loadouts WHERE id = ?').run('only-build');
+    count = db.prepare('SELECT COUNT(*) as c FROM character_loadouts WHERE character_id = ?').get(999999);
+    assert.equal(count.c, 0);
+  });
+
+  it('devrait associer correctement l\'arme signature d\'un personnage', async () => {
+    const { getSignatureWeaponId } = await import('../client/src/api.js');
+    // Hu Tao -> Bâton de Homa (13501)
+    assert.equal(getSignatureWeaponId({ id: 'avatar_10000046', name: 'Hu Tao' }), 13501);
+    // Raiden -> Lumière du faucheur (13509)
+    assert.equal(getSignatureWeaponId({ id: 'avatar_10000052', name: 'Shogun Raiden' }), 13509);
+    // Furina -> Splendeur des eaux calmes (11513)
+    assert.equal(getSignatureWeaponId({ id: 'avatar_10000089', name: 'Furina' }), 11513);
+    // Kazuha -> Serment de la liberté (11503)
+    assert.equal(getSignatureWeaponId({ id: 'avatar_10000047', name: 'Kaedehara Kazuha' }), 11503);
+    // Neuvillette -> Tome du flux éternel (14514)
+    assert.equal(getSignatureWeaponId({ id: 'avatar_10000087', name: 'Neuvillette' }), 14514);
+    // Perso inconnu sans signature -> null
+    assert.equal(getSignatureWeaponId({ id: 'avatar_999999', name: 'Inconnu' }), null);
+    assert.equal(getSignatureWeaponId(null), null);
+  });
 });
+
+
 

@@ -9,7 +9,8 @@ import {
   WEAPON_SVGS,
   fetchEndgame,
   saveEndgame,
-  fetchAbyssMeta
+  fetchAbyssMeta,
+  normalizeElement
 } from '../api.js';
 
 const props = defineProps({
@@ -39,6 +40,7 @@ const currentMode = ref('abyss'); // 'abyss' (2 teams) ou 'carnage' (3 teams)
 const selectedFloor = ref(12); // 11 ou 12 dans les Abysses
 const activeSlot = ref({ teamKey: 'team1', slotIndex: 0 }); // Emplacement actif pour sélection
 const rosterElementFilter = ref('ALL');
+const rosterSearchQuery = ref('');
 const saving = ref(false);
 const saveSuccess = ref(false);
 
@@ -342,9 +344,14 @@ async function handleManualSave() {
 
 const filteredRoster = computed(() => {
   return props.characters.filter(c => {
-    if (rosterElementFilter.value === 'ALL') return true;
-    const el = ELEMENT_LABELS[c.element] || c.element;
-    return el === rosterElementFilter.value;
+    if (rosterElementFilter.value !== 'ALL') {
+      if (normalizeElement(c.element) !== normalizeElement(rosterElementFilter.value)) return false;
+    }
+    if (rosterSearchQuery.value.trim()) {
+      const q = rosterSearchQuery.value.toLowerCase().trim();
+      if (!c.name.toLowerCase().includes(q)) return false;
+    }
+    return true;
   });
 });
 </script>
@@ -632,6 +639,20 @@ const filteredRoster = computed(() => {
               </span>
             </div>
 
+            <!-- Barre de recherche rapide de perso Endgame -->
+            <div class="roster-search-bar">
+              <svg class="search-mini-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input
+                v-model="rosterSearchQuery"
+                type="search"
+                placeholder="Rechercher par nom..."
+                class="roster-search-input"
+              />
+            </div>
+
             <!-- Filtres éléments officiels Yatta -->
             <div class="roster-filters">
               <button
@@ -679,6 +700,7 @@ const filteredRoster = computed(() => {
                   class="avatar-img"
                   loading="lazy"
                 />
+                <img :src="getElementIconUrl(char.element)" class="char-mini-el" />
               </div>
 
               <span class="roster-name">{{ char.name }}</span>
@@ -698,6 +720,10 @@ const filteredRoster = computed(() => {
                 T{{ characterTeamOwners[Number(char.id.replace('avatar_', ''))][0] + 1 }}
               </span>
             </button>
+
+            <div v-if="filteredRoster.length === 0" class="empty-roster-hint">
+              Aucun personnage ne correspond à vos filtres.
+            </div>
           </div>
         </div>
       </div>
@@ -1399,9 +1425,7 @@ const filteredRoster = computed(() => {
 
 .roster-panel-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.75rem;
 }
 
@@ -1417,16 +1441,42 @@ const filteredRoster = computed(() => {
   color: var(--text-dim);
 }
 
+.roster-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.75rem;
+  width: 100%;
+}
+
+.search-mini-icon {
+  color: var(--accent-mint);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.roster-search-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  width: 100%;
+}
+
 .roster-filters {
   display: flex;
-  gap: 0.3rem;
+  gap: 0.35rem;
   flex-wrap: wrap;
 }
 
 .roster-filter-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
   background: var(--bg-dark);
   border: 1px solid var(--border-subtle);
   color: var(--text-dim);
@@ -1435,24 +1485,31 @@ const filteredRoster = computed(() => {
   padding: 0.25rem 0.6rem;
   border-radius: 9999px;
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.roster-filter-chip:hover {
+  border-color: var(--border-accent);
+  color: var(--text-main);
 }
 
 .roster-filter-chip.active {
   border-color: var(--accent-mint);
   color: var(--accent-mint);
+  background: rgba(124, 240, 208, 0.1);
 }
 
 .filter-chip-img {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   object-fit: contain;
 }
 
 .roster-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
-  gap: 0.6rem;
-  max-height: 280px;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: 0.65rem;
+  max-height: 310px;
   overflow-y: auto;
   padding-right: 0.3rem;
 }
@@ -1461,11 +1518,11 @@ const filteredRoster = computed(() => {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 0.4rem 0.2rem;
+  padding: 0.5rem 0.25rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
   cursor: pointer;
   position: relative;
   transition: all 0.15s ease;
@@ -1483,22 +1540,46 @@ const filteredRoster = computed(() => {
 }
 
 .roster-avatar-wrap {
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  border: 1.5px solid;
+  border: 2px solid;
   overflow: hidden;
-  background: var(--bg-dark);
+  background: var(--bg-surface);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.char-mini-el {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(11, 13, 18, 0.85);
+  padding: 1px;
 }
 
 .roster-name {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
+  font-weight: 600;
   color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 72px;
+  max-width: 76px;
   text-align: center;
+}
+
+.empty-roster-hint {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-dim);
+  font-size: 0.85rem;
 }
 
 .roster-badge {

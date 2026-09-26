@@ -22,14 +22,17 @@ export const ELEMENT_COLORS = {
   Hydro: '#4FB2FF',
   Wind: '#4BE3B8',
   Anemo: '#4BE3B8',
+  'Anémo': '#4BE3B8',
   Electric: '#B98CFF',
   Electro: '#B98CFF',
+  'Électro': '#B98CFF',
   Grass: '#A6E05A',
   Dendro: '#A6E05A',
   Ice: '#9FE6FF',
   Cryo: '#9FE6FF',
   Rock: '#F3C552',
-  Geo: '#F3C552'
+  Geo: '#F3C552',
+  'Géo': '#F3C552'
 };
 
 export const ELEMENT_LABELS = {
@@ -39,15 +42,44 @@ export const ELEMENT_LABELS = {
   Hydro: 'Hydro',
   Wind: 'Anémo',
   Anemo: 'Anémo',
+  'Anémo': 'Anémo',
   Electric: 'Électro',
   Electro: 'Électro',
+  'Électro': 'Électro',
   Grass: 'Dendro',
   Dendro: 'Dendro',
   Ice: 'Cryo',
   Cryo: 'Cryo',
   Rock: 'Géo',
-  Geo: 'Géo'
+  Geo: 'Géo',
+  'Géo': 'Géo'
 };
+
+// Dictionnaire de canonisation des éléments (indépendant des accents ou des noms API)
+export const CANONICAL_ELEMENTS = {
+  Fire: 'Pyro',
+  Pyro: 'Pyro',
+  Water: 'Hydro',
+  Hydro: 'Hydro',
+  Wind: 'Anemo',
+  Anemo: 'Anemo',
+  'Anémo': 'Anemo',
+  Electric: 'Electro',
+  Electro: 'Electro',
+  'Électro': 'Electro',
+  Grass: 'Dendro',
+  Dendro: 'Dendro',
+  Ice: 'Cryo',
+  Cryo: 'Cryo',
+  Rock: 'Geo',
+  Geo: 'Geo',
+  'Géo': 'Geo'
+};
+
+export function normalizeElement(el) {
+  if (!el) return '';
+  return CANONICAL_ELEMENTS[el] || el;
+}
 
 // Insignes élémentaires officiels de Genshin Impact (CDN Yatta 200 OK)
 export const ELEMENT_OFFICIAL_ICONS = {
@@ -68,7 +100,8 @@ export const ELEMENT_OFFICIAL_ICONS = {
 };
 
 export function getElementIconUrl(element) {
-  return ELEMENT_OFFICIAL_ICONS[element] || '';
+  const norm = normalizeElement(element);
+  return ELEMENT_OFFICIAL_ICONS[norm] || ELEMENT_OFFICIAL_ICONS[element] || '';
 }
 
 // Tracés SVG des éléments de la maquette
@@ -164,6 +197,77 @@ export const ELEMENT_REACTIONS = [
   { elements: ['Dendro', 'Hydro'], name: 'Fleurissement', color: '#a6e05a' },
   { elements: ['Dendro', 'Electro'], name: 'Stimulation', color: '#7fe08a' }
 ];
+
+// Armes signatures officielles Genshin Impact par ID de personnage
+export const SIGNATURE_WEAPONS = {
+  // Épées à une main (SWORD)
+  10000003: 11501, // Jean -> Épée du faucon
+  10000047: 11503, // Kaedehara Kazuha -> Serment de la liberté
+  10000002: 11509, // Kamisato Ayaka -> Reflet de tranche-brume
+  10000066: 11510, // Kamisato Ayato -> Lune ondulante de Futsu
+  10000070: 11511, // Nilou -> Clé de Khaj-Nisut
+  10000078: 11512, // Alhaitham -> Lumière d'incision foliaire
+  10000089: 11513, // Furina -> Splendeur des eaux calmes
+  10000094: 11514, // Chiori -> Uraku Misugiri
+  10000098: 11515, // Clorinde -> Absolution
+  10000103: 11516, // Xilonen -> Chanson de patrouille de sommet
+  10000038: 11415, // Albedo -> Fuseau de cinabre
+  10000042: 11505, // Keqing -> Coupeur de jade primordial
+  10000035: 11501, // Qiqi -> Épée du faucon
+
+  // Épées à deux mains (CLAYMORE)
+  10000016: 12502, // Diluc -> Mort-du-loup
+  10000051: 12503, // Eula -> Ode au chant du vent
+  10000057: 12510, // Arataki Itto -> Brise-pierre de corne rouge
+  10000079: 12511, // Dehya -> Balise de la mer de roseaux
+  10000091: 12512, // Navia -> Condamneur
+  10000101: 12513, // Kinich -> Croc du roi de la montagne
+  10000106: 12514, // Mavuika -> Mille soleils brûlants
+
+  // Armes d'hast (POLE)
+  10000046: 13501, // Hu Tao -> Bâton de Homa
+  10000030: 13504, // Zhongli -> Perceur prismatique
+  10000026: 13505, // Xiao -> Lance de jade ailée
+  10000063: 13507, // Shenhe -> Étouffeur de calamités
+  10000052: 13509, // Shogun Raiden -> Lumière du faucheur
+  10000071: 13511, // Cyno -> Bâton des sables écarlates
+  10000096: 13512, // Arlecchino -> Semblance de la lune écarlate
+  10000099: 13513, // Émilie -> Élégie de Lumidouce
+
+  // Catalyseurs (CATALYST)
+  10000041: 14501, // Mona -> Atlas de la Voûte d'Azur
+  10000029: 14502, // Klee -> L'origine des Quatre Vents
+  10000082: 14505, // Baizhu -> Splendeur de l'azur
+  10000054: 14506, // Sangonomiya Kokomi -> Lueur de la lune éternelle
+  10000058: 14509, // Yae Miko -> Vérité de Kagura
+  10000073: 14511, // Nahida -> Mille rêves flottants
+  10000075: 14512, // Nomade -> Mémoire de Tulaytullah
+  10000086: 14513, // Wriothesley -> Supervision de trésorerie
+  10000087: 14514, // Neuvillette -> Tome du flux éternel
+  10000093: 14515, // Xianyun -> Écho de la grue
+  10000102: 14516, // Mualani -> Instant surfant
+  10000107: 14517, // Citlali -> Veillée d'appel d'étoiles
+
+  // Arcs (BOW)
+  10000037: 15502, // Ganyu -> Arc d'Amos
+  10000022: 15503, // Venti -> Ultime soupir
+  10000033: 15507, // Tartaglia -> Étoile polaire
+  10000060: 15508, // Yelan -> Simulacre d'eau
+  10000049: 15509, // Yoimiya -> Pulsation du tonnerre
+  10000069: 15511, // Tighnari -> La voie du chasseur
+  10000084: 15512, // Lyney -> La première grande magie
+  10000095: 15513, // Sigewinne -> Corde de pluie blanche
+  10000104: 15514, // Chasca -> Plumage cramoisi du vautour astral
+  10000031: 15412  // Fischl -> Valse nocturne
+};
+
+export function getSignatureWeaponId(character) {
+  if (!character) return null;
+  const rawId = typeof character === 'object'
+    ? Number(String(character.id || '').replace('avatar_', '').split('-')[0])
+    : Number(String(character).replace('avatar_', '').split('-')[0]);
+  return SIGNATURE_WEAPONS[rawId] || null;
+}
 
 export function computeSynergies(characterElements) {
   const counts = {};

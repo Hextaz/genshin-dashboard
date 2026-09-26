@@ -1,12 +1,13 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import {
   getIconUrl,
   ELEMENT_COLORS,
   ELEMENT_LABELS,
   getElementIconUrl,
   WEAPON_LABELS,
-  WEAPON_SVGS
+  WEAPON_SVGS,
+  normalizeElement
 } from '../api.js';
 import CharacterDrawer from '../components/CharacterDrawer.vue';
 
@@ -73,8 +74,7 @@ const filteredCharacters = computed(() => {
 
     // Filtre élément
     if (selectedElement.value !== 'ALL') {
-      const charEl = ELEMENT_LABELS[char.element] || char.element;
-      if (charEl !== selectedElement.value) return false;
+      if (normalizeElement(char.element) !== normalizeElement(selectedElement.value)) return false;
     }
 
     // Filtre arme
@@ -91,11 +91,18 @@ const filteredCharacters = computed(() => {
   });
 });
 
-function toggleCharacter(char) {
+async function toggleCharacter(char) {
   if (activeCharacter.value && activeCharacter.value.id === char.id) {
     activeCharacter.value = null; // Recliquer ferme le volet
   } else {
     activeCharacter.value = char;
+    await nextTick();
+    if (window.innerWidth <= 900) {
+      const drawer = document.querySelector('.character-drawer');
+      if (drawer) {
+        drawer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
   }
 }
 </script>
@@ -144,9 +151,9 @@ function toggleCharacter(char) {
         </div>
       </div>
 
-      <!-- Filtres Éléments avec VRAIS insignes officiels Yatta -->
+      <!-- Filtres Éléments & Rareté avec VRAIS insignes officiels Yatta -->
       <div class="filter-row">
-        <span class="filter-label">Élément :</span>
+        <span class="filter-label">Élément & Rareté :</span>
         <div class="pill-group">
           <button
             v-for="el in elementsList"
@@ -165,12 +172,22 @@ function toggleCharacter(char) {
             />
             <span>{{ el === 'ALL' ? 'Tous' : (ELEMENT_LABELS[el] || el) }}</span>
           </button>
+          <div class="separator"></div>
+          <button
+            v-for="r in ['ALL', '5', '4']"
+            :key="r"
+            type="button"
+            :class="['filter-pill', { active: selectedRarity === r }]"
+            @click="selectedRarity = r"
+          >
+            {{ r === 'ALL' ? 'Toutes' : `${r}★` }}
+          </button>
         </div>
       </div>
 
-      <!-- Filtres Armes & Rareté -->
+      <!-- Filtres Armes -->
       <div class="filter-row">
-        <span class="filter-label">Arme & Rareté :</span>
+        <span class="filter-label">Arme :</span>
         <div class="pill-group">
           <button
             v-for="w in weaponsList"
@@ -183,16 +200,6 @@ function toggleCharacter(char) {
               <path :d="WEAPON_SVGS[w]" />
             </svg>
             <span>{{ w === 'ALL' ? 'Toutes armes' : WEAPON_LABELS[w] }}</span>
-          </button>
-          <div class="separator"></div>
-          <button
-            v-for="r in ['ALL', '5', '4']"
-            :key="r"
-            type="button"
-            :class="['filter-pill', { active: selectedRarity === r }]"
-            @click="selectedRarity = r"
-          >
-            {{ r === 'ALL' ? 'Toutes' : `${r}★` }}
           </button>
         </div>
       </div>

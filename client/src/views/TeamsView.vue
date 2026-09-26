@@ -10,7 +10,8 @@ import {
   computeSynergies,
   createTeam,
   updateTeam,
-  deleteTeam
+  deleteTeam,
+  normalizeElement
 } from '../api.js';
 
 const props = defineProps({
@@ -197,6 +198,7 @@ const showEditModal = ref(false);
 const editingTeamId = ref(null);
 const editorActiveSlot = ref(1); // 1, 2, 3 ou 4
 const editorElementFilter = ref('ALL');
+const editorSearchQuery = ref('');
 
 const editorForm = ref({
   name: 'Nouvelle Team',
@@ -208,6 +210,7 @@ function openNewTeamModal() {
   editingTeamId.value = null;
   editorActiveSlot.value = 1;
   editorElementFilter.value = 'ALL';
+  editorSearchQuery.value = '';
   editorForm.value = {
     name: 'Nouvelle Team',
     description: '',
@@ -220,6 +223,7 @@ function openEditTeamModal(team) {
   editingTeamId.value = team.id;
   editorActiveSlot.value = 1;
   editorElementFilter.value = 'ALL';
+  editorSearchQuery.value = '';
   editorForm.value = {
     name: team.name,
     description: team.description || '',
@@ -238,9 +242,14 @@ const editorSynergies = computed(() => {
 
 const editorFilteredCharacters = computed(() => {
   return props.characters.filter(c => {
-    if (editorElementFilter.value === 'ALL') return true;
-    const el = ELEMENT_LABELS[c.element] || c.element;
-    return el === editorElementFilter.value;
+    if (editorElementFilter.value !== 'ALL') {
+      if (normalizeElement(c.element) !== normalizeElement(editorElementFilter.value)) return false;
+    }
+    if (editorSearchQuery.value.trim()) {
+      const q = editorSearchQuery.value.toLowerCase().trim();
+      if (!c.name.toLowerCase().includes(q)) return false;
+    }
+    return true;
   });
 });
 
@@ -641,7 +650,7 @@ async function deleteEditorTeam() {
           <button type="button" class="btn-close-modal" @click="showEditModal = false">✕</button>
         </div>
 
-        <form @submit.prevent="saveEditorTeam">
+        <form class="team-editor-form" @submit.prevent="saveEditorTeam">
           <div class="editor-field-row">
             <label class="form-label">
               <span>Nom de la team</span>
@@ -704,6 +713,20 @@ async function deleteEditorTeam() {
                 Cliquez pour assigner au <strong>Slot {{ editorActiveSlot }}</strong> :
               </span>
 
+              <!-- Barre de recherche rapide de perso -->
+              <div class="roster-search-bar">
+                <svg class="search-mini-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input
+                  v-model="editorSearchQuery"
+                  type="search"
+                  placeholder="Rechercher par nom..."
+                  class="roster-search-input"
+                />
+              </div>
+
               <!-- Filtres Éléments -->
               <div class="roster-el-filters">
                 <button
@@ -713,7 +736,12 @@ async function deleteEditorTeam() {
                   :class="['roster-filter-btn', { active: editorElementFilter === el }]"
                   @click="editorElementFilter = el"
                 >
-                  {{ el === 'ALL' ? 'Tous' : (ELEMENT_LABELS[el] || el) }}
+                  <img
+                    v-if="el !== 'ALL'"
+                    :src="getElementIconUrl(el)"
+                    class="roster-el-icon"
+                  />
+                  <span>{{ el === 'ALL' ? 'Tous' : (ELEMENT_LABELS[el] || el) }}</span>
                 </button>
               </div>
             </div>
@@ -730,12 +758,17 @@ async function deleteEditorTeam() {
               >
                 <div
                   class="roster-char-ring"
-                  :style="{ borderColor: ELEMENT_COLORS[char.element] }"
+                  :style="{ borderColor: ELEMENT_COLORS[char.element] || '#7CF0D0' }"
                 >
                   <img :src="getIconUrl(char.icon)" class="avatar-img" />
+                  <img :src="getElementIconUrl(char.element)" class="char-mini-el" />
                 </div>
                 <span class="roster-char-name">{{ char.name }}</span>
               </button>
+
+              <div v-if="editorFilteredCharacters.length === 0" class="empty-roster-hint">
+                Aucun personnage ne correspond à vos filtres.
+              </div>
             </div>
           </div>
 
@@ -1344,6 +1377,12 @@ async function deleteEditorTeam() {
   color: var(--text-main);
 }
 
+.team-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
 .form-label {
   display: flex;
   flex-direction: column;
@@ -1378,11 +1417,11 @@ async function deleteEditorTeam() {
   background: var(--bg-dark);
   border: 1.5px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 0.75rem 0.5rem;
+  padding: 0.9rem 0.6rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   cursor: pointer;
   position: relative;
   transition: all 0.15s ease;
@@ -1403,8 +1442,8 @@ async function deleteEditorTeam() {
 }
 
 .editor-slot-avatar {
-  width: 44px;
-  height: 44px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   border: 2px solid;
   overflow: hidden;
@@ -1434,14 +1473,14 @@ async function deleteEditorTeam() {
 }
 
 .editor-slot-empty {
-  width: 44px;
-  height: 44px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   border: 1px dashed var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   color: var(--accent-mint);
 }
 
@@ -1453,19 +1492,17 @@ async function deleteEditorTeam() {
 .editor-roster-section {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.75rem;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 0.9rem;
+  padding: 1rem;
 }
 
 .editor-roster-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
 .roster-instruction {
@@ -1473,76 +1510,144 @@ async function deleteEditorTeam() {
   color: var(--text-muted);
 }
 
+.roster-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.75rem;
+  width: 100%;
+}
+
+.search-mini-icon {
+  color: var(--accent-mint);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.roster-search-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  width: 100%;
+}
+
 .roster-el-filters {
   display: flex;
-  gap: 0.25rem;
+  gap: 0.35rem;
   flex-wrap: wrap;
+}
+
+.roster-el-icon {
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
 }
 
 .roster-filter-btn {
   background: var(--bg-dark);
   border: 1px solid var(--border-subtle);
   color: var(--text-dim);
-  font-size: 0.7rem;
-  padding: 0.2rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
   border-radius: 9999px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: all 0.15s ease;
+}
+
+.roster-filter-btn:hover {
+  border-color: var(--border-accent);
+  color: var(--text-main);
 }
 
 .roster-filter-btn.active {
   border-color: var(--accent-mint);
   color: var(--accent-mint);
+  background: rgba(124, 240, 208, 0.1);
 }
 
 .editor-roster-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
-  gap: 0.5rem;
-  max-height: 220px;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: 0.6rem;
+  max-height: 290px;
   overflow-y: auto;
   padding-right: 0.3rem;
 }
 
 .roster-char-item {
-  background: transparent;
-  border: 1px solid transparent;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 0.3rem;
+  padding: 0.5rem 0.25rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.35rem;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .roster-char-item:hover {
-  background: var(--bg-surface);
-  border-color: var(--border-accent);
+  background: var(--bg-surface-hover);
+  border-color: var(--accent-mint);
+  transform: translateY(-2px);
 }
 
 .roster-char-item.selected {
-  opacity: 0.4;
+  opacity: 0.45;
   filter: grayscale(0.8);
 }
 
 .roster-char-ring {
-  width: 40px;
-  height: 40px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  border: 1.5px solid;
+  border: 2px solid;
   overflow: hidden;
-  background: var(--bg-dark);
+  background: var(--bg-surface);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.char-mini-el {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(11, 13, 18, 0.85);
+  padding: 1px;
 }
 
 .roster-char-name {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
+  font-weight: 600;
   color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 65px;
+  max-width: 76px;
   text-align: center;
+}
+
+.empty-roster-hint {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-dim);
+  font-size: 0.85rem;
 }
 
 .editor-bottom-actions {

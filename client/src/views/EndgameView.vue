@@ -478,346 +478,344 @@ const filteredRoster = computed(() => {
       </div>
     </div>
 
-    <!-- Disposition Équipes & Roster -->
+    <!-- Disposition Équipes à Gauche & Roster à Droite -->
     <div class="endgame-main-layout">
-      <div class="endgame-columns-area">
-        <!-- Colonnes des Équipes (2 colonnes pour Abysses, 3 pour Carnage) -->
-        <div :class="['teams-columns-grid', { 'three-columns': currentMode === 'carnage' }]">
-          <section
-            v-for="(teamKey, tIdx) in activeTeamKeys"
-            :key="teamKey"
-            class="team-column-card"
-          >
-            <div class="column-header">
-              <div>
-                <h3 class="column-title">
-                  {{ teamKey === 'team1' ? 'Team 1 (1re moitié)' : (teamKey === 'team2' ? 'Team 2 (2e moitié)' : 'Team 3 (Boss 3)') }}
-                </h3>
-                <span class="column-count">
-                  {{ setup[teamKey].filter(Boolean).length }}/4 personnages
-                </span>
-              </div>
-
-              <div class="column-actions">
-                <button
-                  type="button"
-                  class="btn-col-action"
-                  title="Vider cette équipe"
-                  :disabled="!setup[teamKey].some(Boolean)"
-                  @click="clearEntireTeam(teamKey)"
-                >
-                  ✕
-                </button>
-              </div>
+      <!-- Colonne Gauche : Équipes empilées verticalement -->
+      <div class="teams-vertical-stack">
+        <section
+          v-for="(teamKey, tIdx) in activeTeamKeys"
+          :key="teamKey"
+          class="team-stack-card"
+        >
+          <div class="column-header">
+            <div>
+              <h3 class="column-title">
+                {{ teamKey === 'team1' ? 'Team 1 (1re moitié)' : (teamKey === 'team2' ? 'Team 2 (2e moitié)' : 'Team 3 (Boss 3)') }}
+              </h3>
+              <span class="column-count">
+                {{ setup[teamKey].filter(Boolean).length }}/4 personnages
+              </span>
             </div>
 
-            <!-- 4 Slots de personnages cliquables (SANS SELECT) avec Arme & Artéfacts -->
-            <div class="slots-grid">
-              <div
-                v-for="(slot, sIdx) in setup[teamKey]"
-                :key="sIdx"
-                :class="[
-                  'slot-card',
-                  {
-                    active: activeSlot.teamKey === teamKey && activeSlot.slotIndex === sIdx,
-                    duplicate: slot && characterTeamOwners[slot.character_id]?.[0] < tIdx
-                  }
-                ]"
-                @click="selectSlot(teamKey, sIdx)"
+            <div class="column-actions">
+              <!-- Bouton Importer une team préconfigurée -->
+              <button
+                type="button"
+                class="btn-open-import"
+                title="Importer une équipe enregistrée"
+                @click="openPresetModal(teamKey)"
               >
-                <!-- Bouton Retirer le personnage du slot si rempli -->
-                <button
-                  v-if="slot"
-                  type="button"
-                  class="btn-clear-slot"
-                  title="Retirer de l'équipe"
-                  @click.stop="clearSlot(teamKey, sIdx)"
-                >
-                  ✕
-                </button>
-
-                <!-- Slot avec personnage -->
-                <template v-if="slot && charactersMap[slot.character_id]">
-                  <!-- Avatar du personnage avec anneau coloré & badge élément (cliquable pour changer de build) -->
-                  <div class="slot-avatar-container" @click.stop="openBuildPickerEndgame(teamKey, sIdx)" title="Cliquer pour changer de build">
-                    <div
-                      class="avatar-circle-ring"
-                      :style="{
-                        borderColor: ELEMENT_COLORS[charactersMap[slot.character_id].element],
-                        boxShadow: `0 0 16px ${ELEMENT_COLORS[charactersMap[slot.character_id].element]}40`
-                      }"
-                    >
-                      <img
-                        :src="getIconUrl(charactersMap[slot.character_id].icon)"
-                        :alt="charactersMap[slot.character_id].name"
-                        class="avatar-img"
-                      />
-                    </div>
-
-                    <!-- Insigne de l'élément officiel -->
-                    <div class="slot-mini-el" :style="{ borderColor: ELEMENT_COLORS[charactersMap[slot.character_id].element] }">
-                      <img :src="getElementIconUrl(charactersMap[slot.character_id].element)" class="slot-mini-el-img" />
-                    </div>
-                  </div>
-
-                  <span class="slot-name-text">
-                    {{ charactersMap[slot.character_id].name }}
-                  </span>
-
-                  <!-- Avertissement de doublon visuel -->
-                  <span
-                    v-if="characterTeamOwners[slot.character_id]?.[0] < tIdx"
-                    class="duplicate-warn-tag"
-                  >
-                    Déjà en Team {{ characterTeamOwners[slot.character_id][0] + 1 }}
-                  </span>
-
-                  <!-- Vignettes d'équipements : Arme + Set d'artéfacts agrandis (44px) -->
-                  <div class="slot-gear-preview" v-if="slot.loadout_id && loadoutsMap[slot.loadout_id]">
-                    <!-- Arme -->
-                    <div
-                      v-if="weaponsMap[loadoutsMap[slot.loadout_id].weapon_id]"
-                      :class="['gear-icon-chip', `rarity-${weaponsMap[loadoutsMap[slot.loadout_id].weapon_id].rarity || 4}`]"
-                      :title="`${weaponsMap[loadoutsMap[slot.loadout_id].weapon_id].name} (R${loadoutsMap[slot.loadout_id].weapon_refinement || 1})`"
-                    >
-                      <img :src="getIconUrl(weaponsMap[loadoutsMap[slot.loadout_id].weapon_id].icon)" class="gear-img" />
-                      <span class="gear-sub-tag tag-refinement">R{{ loadoutsMap[slot.loadout_id].weapon_refinement || 1 }}</span>
-                    </div>
-
-                    <!-- Artéfact Set 1 -->
-                    <div
-                      v-if="relicsMap[loadoutsMap[slot.loadout_id].artifact_set_1_id]"
-                      :class="['gear-icon-chip', `rarity-${relicsMap[loadoutsMap[slot.loadout_id].artifact_set_1_id].rarity || 5}`]"
-                      :title="relicsMap[loadoutsMap[slot.loadout_id].artifact_set_1_id].name"
-                    >
-                      <img :src="getIconUrl(relicsMap[loadoutsMap[slot.loadout_id].artifact_set_1_id].icon, 'reliquary')" class="gear-img" />
-                      <span :class="['gear-sub-tag', loadoutsMap[slot.loadout_id].artifact_set_2_id ? 'tag-relic-2p' : 'tag-relic-4p']">
-                        {{ loadoutsMap[slot.loadout_id].artifact_set_2_id ? '2p' : '4p' }}
-                      </span>
-                    </div>
-
-                    <!-- Artéfact Set 2 (si 2+2) -->
-                    <div
-                      v-if="loadoutsMap[slot.loadout_id].artifact_set_2_id && relicsMap[loadoutsMap[slot.loadout_id].artifact_set_2_id]"
-                      :class="['gear-icon-chip', `rarity-${relicsMap[loadoutsMap[slot.loadout_id].artifact_set_2_id].rarity || 5}`]"
-                      :title="relicsMap[loadoutsMap[slot.loadout_id].artifact_set_2_id].name"
-                    >
-                      <img :src="getIconUrl(relicsMap[loadoutsMap[slot.loadout_id].artifact_set_2_id].icon, 'reliquary')" class="gear-img" />
-                      <span class="gear-sub-tag tag-relic-2p">2p</span>
-                    </div>
-                  </div>
-
-                  <!-- Espace réservé si aucun build assigné pour garder l'alignement -->
-                  <div v-else class="slot-gear-empty">
-                    <span class="gear-empty-text">Aucun équipement</span>
-                  </div>
-
-                  <!-- Bouton Nom du Build intégré qui ouvre la modale de sélection de build -->
-                  <button
-                    type="button"
-                    class="slot-loadout-pill"
-                    :style="{
-                      color: ELEMENT_COLORS[charactersMap[slot.character_id].element],
-                      background: `${ELEMENT_COLORS[charactersMap[slot.character_id].element]}15`,
-                      borderColor: `${ELEMENT_COLORS[charactersMap[slot.character_id].element]}40`
-                    }"
-                    title="Cliquer pour choisir un autre build"
-                    @click.stop="openBuildPickerEndgame(teamKey, sIdx)"
-                  >
-                    <span class="pill-name-truncate">
-                      {{ (slot.loadout_id && loadoutsMap[slot.loadout_id]?.name) || 'Choisir un build' }}
-                    </span>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M6 9l6 6 6-6"/>
-                    </svg>
-                  </button>
-                </template>
-
-                <!-- Slot vide -->
-                <template v-else>
-                  <div class="empty-slot-wrap">
-                    <div class="empty-circle-dashed">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                        <path d="M12 5v14M5 12h14" />
-                      </svg>
-                    </div>
-                    <span class="empty-text">Slot vide</span>
-                  </div>
-                </template>
-              </div>
-            </div>
-
-            <!-- Bouton Importer une team préconfigurée (ouvre une vraie modale) -->
-            <button
-              type="button"
-              class="btn-open-import"
-              @click="openPresetModal(teamKey)"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
-              </svg>
-              Importer une team préconfigurée
-            </button>
-          </section>
-        </div>
-
-        <!-- Grille de sélection de personnages (Roster avec Filtres Complets & Persos Agrandis) -->
-        <div class="roster-selection-panel">
-          <div class="roster-panel-header">
-            <div class="roster-title-row">
-              <div>
-                <h3 class="roster-panel-title">Sélection du Personnage</h3>
-                <span class="roster-hint">
-                  Emplacement actif : <strong>{{ activeSlot.teamKey === 'team1' ? 'Team 1' : (activeSlot.teamKey === 'team2' ? 'Team 2' : 'Team 3') }}, Slot {{ activeSlot.slotIndex + 1 }}</strong> · Cliquez pour assigner. Les persos déjà pris dans une autre équipe sont verrouillés.
-                </span>
-              </div>
-            </div>
-
-            <!-- Barre de recherche & Filtre Statut d'acquisition -->
-            <div class="roster-search-status-row">
-              <div class="roster-search-bar">
-                <svg class="search-mini-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
                 </svg>
-                <input
-                  v-model="rosterSearchQuery"
-                  type="search"
-                  placeholder="Rechercher par nom..."
-                  class="roster-search-input"
-                />
-              </div>
+                Importer
+              </button>
 
-              <div class="roster-status-pills">
-                <button
-                  type="button"
-                  :class="['status-pill-btn', { active: rosterStatusFilter === 'ALL' }]"
-                  @click="rosterStatusFilter = 'ALL'"
-                >
-                  Tous ({{ characters.length }})
-                </button>
-                <button
-                  type="button"
-                  :class="['status-pill-btn', { active: rosterStatusFilter === 'OWNED' }]"
-                  @click="rosterStatusFilter = 'OWNED'"
-                >
-                  ★ Possédés
-                </button>
-              </div>
-            </div>
-
-            <!-- Filtres Éléments & Rareté avec VRAIS insignes officiels Yatta -->
-            <div class="roster-filters-row">
-              <span class="roster-filter-label">Élément & Rareté :</span>
-              <div class="roster-pill-group">
-                <button
-                  v-for="el in elementsList"
-                  :key="el"
-                  type="button"
-                  :class="['roster-filter-chip', { active: rosterElementFilter === el }]"
-                  :style="rosterElementFilter === el && el !== 'ALL' ? { borderColor: ELEMENT_COLORS[el], color: ELEMENT_COLORS[el], background: `${ELEMENT_COLORS[el]}18` } : {}"
-                  @click="rosterElementFilter = el"
-                >
-                  <img
-                    v-if="el !== 'ALL'"
-                    :src="getElementIconUrl(el)"
-                    alt=""
-                    aria-hidden="true"
-                    class="filter-chip-img"
-                  />
-                  <span>{{ el === 'ALL' ? 'Tous' : (ELEMENT_LABELS[el] || el) }}</span>
-                </button>
-
-                <div class="roster-sep"></div>
-
-                <button
-                  v-for="r in ['ALL', '5', '4']"
-                  :key="r"
-                  type="button"
-                  :class="['roster-filter-chip', { active: rosterRarityFilter === r }]"
-                  @click="rosterRarityFilter = r"
-                >
-                  {{ r === 'ALL' ? 'Toutes' : `${r}★` }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Filtres Armes avec icônes officielles SVG -->
-            <div class="roster-filters-row">
-              <span class="roster-filter-label">Arme :</span>
-              <div class="roster-pill-group">
-                <button
-                  v-for="w in weaponsList"
-                  :key="w"
-                  type="button"
-                  :class="['roster-filter-chip', { active: rosterWeaponFilter === w }]"
-                  @click="rosterWeaponFilter = w"
-                >
-                  <svg v-if="w !== 'ALL'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="el-svg">
-                    <path :d="WEAPON_SVGS[w]" />
-                  </svg>
-                  <span>{{ w === 'ALL' ? 'Toutes' : WEAPON_LABELS[w] }}</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                class="btn-col-action"
+                title="Vider cette équipe"
+                :disabled="!setup[teamKey].some(Boolean)"
+                @click="clearEntireTeam(teamKey)"
+              >
+                ✕
+              </button>
             </div>
           </div>
 
-          <div class="roster-grid">
-            <button
-              v-for="char in filteredRoster"
-              :key="char.id"
-              type="button"
+          <!-- 4 Slots de personnages cliquables (SANS SELECT) avec Arme & Artéfacts -->
+          <div class="slots-grid">
+            <div
+              v-for="(slot, sIdx) in setup[teamKey]"
+              :key="sIdx"
               :class="[
-                'roster-card',
+                'slot-card',
                 {
-                  assigned: characterTeamOwners[Number(char.id.replace('avatar_', ''))]?.length > 0,
-                  locked: getOtherTeamAssignment(Number(char.id.replace('avatar_', '')), activeSlot.teamKey)
+                  active: activeSlot.teamKey === teamKey && activeSlot.slotIndex === sIdx,
+                  duplicate: slot && characterTeamOwners[slot.character_id]?.[0] < tIdx
                 }
               ]"
-              :disabled="Boolean(getOtherTeamAssignment(Number(char.id.replace('avatar_', '')), activeSlot.teamKey))"
-              @click="pickCharacterFromRoster(char)"
+              @click="selectSlot(teamKey, sIdx)"
             >
-              <div
-                class="roster-avatar-wrap"
-                :style="{
-                  borderColor: ELEMENT_COLORS[char.element] || '#7CF0D0',
-                  boxShadow: `0 0 10px ${ELEMENT_COLORS[char.element]}30`
-                }"
+              <!-- Bouton Retirer le personnage du slot si rempli -->
+              <button
+                v-if="slot"
+                type="button"
+                class="btn-clear-slot"
+                title="Retirer de l'équipe"
+                @click.stop="clearSlot(teamKey, sIdx)"
+              >
+                ✕
+              </button>
+
+              <!-- Slot avec personnage -->
+              <template v-if="slot && charactersMap[slot.character_id]">
+                <!-- Avatar du personnage avec anneau coloré & badge élément (cliquable pour changer de build) -->
+                <div class="slot-avatar-container" @click.stop="openBuildPickerEndgame(teamKey, sIdx)" title="Cliquer pour changer de build">
+                  <div
+                    class="avatar-circle-ring"
+                    :style="{
+                      borderColor: ELEMENT_COLORS[charactersMap[slot.character_id].element],
+                      boxShadow: `0 0 16px ${ELEMENT_COLORS[charactersMap[slot.character_id].element]}40`
+                    }"
+                  >
+                    <img
+                      :src="getIconUrl(charactersMap[slot.character_id].icon)"
+                      :alt="charactersMap[slot.character_id].name"
+                      class="avatar-img"
+                    />
+                  </div>
+
+                  <!-- Insigne de l'élément officiel -->
+                  <div class="slot-mini-el" :style="{ borderColor: ELEMENT_COLORS[charactersMap[slot.character_id].element] }">
+                    <img :src="getElementIconUrl(charactersMap[slot.character_id].element)" class="slot-mini-el-img" />
+                  </div>
+                </div>
+
+                <span class="slot-name-text">
+                  {{ charactersMap[slot.character_id].name }}
+                </span>
+
+                <!-- Avertissement de doublon visuel -->
+                <span
+                  v-if="characterTeamOwners[slot.character_id]?.[0] < tIdx"
+                  class="duplicate-warn-tag"
+                >
+                  Déjà en Team {{ characterTeamOwners[slot.character_id][0] + 1 }}
+                </span>
+
+                <!-- Vignettes d'équipements : Arme + Set d'artéfacts agrandis (44px) -->
+                <div class="slot-gear-preview" v-if="slot.loadout_id && loadoutsMap[slot.loadout_id]">
+                  <!-- Arme -->
+                  <div
+                    v-if="weaponsMap[loadoutsMap[slot.loadout_id].weapon_id]"
+                    :class="['gear-icon-chip', `rarity-${weaponsMap[loadoutsMap[slot.loadout_id].weapon_id].rarity || 4}`]"
+                    :title="`${weaponsMap[loadoutsMap[slot.loadout_id].weapon_id].name} (R${loadoutsMap[slot.loadout_id].weapon_refinement || 1})`"
+                  >
+                    <img :src="getIconUrl(weaponsMap[loadoutsMap[slot.loadout_id].weapon_id].icon)" class="gear-img" />
+                    <span class="gear-sub-tag tag-refinement">R{{ loadoutsMap[slot.loadout_id].weapon_refinement || 1 }}</span>
+                  </div>
+
+                  <!-- Artéfact Set 1 -->
+                  <div
+                    v-if="relicsMap[loadoutsMap[slot.loadout_id].artifact_set_1_id]"
+                    :class="['gear-icon-chip', `rarity-${relicsMap[loadoutsMap[slot.loadout_id].artifact_set_1_id].rarity || 5}`]"
+                    :title="relicsMap[loadoutsMap[slot.loadout_id].artifact_set_1_id].name"
+                  >
+                    <img :src="getIconUrl(relicsMap[loadoutsMap[slot.loadout_id].artifact_set_1_id].icon, 'reliquary')" class="gear-img" />
+                    <span :class="['gear-sub-tag', loadoutsMap[slot.loadout_id].artifact_set_2_id ? 'tag-relic-2p' : 'tag-relic-4p']">
+                      {{ loadoutsMap[slot.loadout_id].artifact_set_2_id ? '2p' : '4p' }}
+                    </span>
+                  </div>
+
+                  <!-- Artéfact Set 2 (si 2+2) -->
+                  <div
+                    v-if="loadoutsMap[slot.loadout_id].artifact_set_2_id && relicsMap[loadoutsMap[slot.loadout_id].artifact_set_2_id]"
+                    :class="['gear-icon-chip', `rarity-${relicsMap[loadoutsMap[slot.loadout_id].artifact_set_2_id].rarity || 5}`]"
+                    :title="relicsMap[loadoutsMap[slot.loadout_id].artifact_set_2_id].name"
+                  >
+                    <img :src="getIconUrl(relicsMap[loadoutsMap[slot.loadout_id].artifact_set_2_id].icon, 'reliquary')" class="gear-img" />
+                    <span class="gear-sub-tag tag-relic-2p">2p</span>
+                  </div>
+                </div>
+
+                <!-- Espace réservé si aucun build assigné pour garder l'alignement -->
+                <div v-else class="slot-gear-empty">
+                  <span class="gear-empty-text">Aucun équipement</span>
+                </div>
+
+                <!-- Bouton Nom du Build intégré qui ouvre la modale de sélection de build -->
+                <button
+                  type="button"
+                  class="slot-loadout-pill"
+                  :style="{
+                    color: ELEMENT_COLORS[charactersMap[slot.character_id].element],
+                    background: `${ELEMENT_COLORS[charactersMap[slot.character_id].element]}15`,
+                    borderColor: `${ELEMENT_COLORS[charactersMap[slot.character_id].element]}40`
+                  }"
+                  title="Cliquer pour choisir un autre build"
+                  @click.stop="openBuildPickerEndgame(teamKey, sIdx)"
+                >
+                  <span class="pill-name-truncate">
+                    {{ (slot.loadout_id && loadoutsMap[slot.loadout_id]?.name) || 'Choisir un build' }}
+                  </span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </button>
+              </template>
+
+              <!-- Slot vide -->
+              <template v-else>
+                <div class="empty-slot-wrap">
+                  <div class="empty-circle-dashed">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </div>
+                  <span class="empty-text">Slot vide</span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Colonne Droite : Grille de sélection de personnages (Roster Sticky) -->
+      <aside class="roster-selection-panel">
+        <div class="roster-panel-header">
+          <div class="roster-title-row">
+            <div>
+              <h3 class="roster-panel-title">Sélection du Personnage</h3>
+              <span class="roster-hint">
+                Slot actif : <strong>{{ activeSlot.teamKey === 'team1' ? 'Team 1' : (activeSlot.teamKey === 'team2' ? 'Team 2' : 'Team 3') }}, Slot {{ activeSlot.slotIndex + 1 }}</strong> · Cliquez sur un personnage pour l'assigner.
+              </span>
+            </div>
+          </div>
+
+          <!-- Barre de recherche & Filtre Statut d'acquisition -->
+          <div class="roster-search-status-row">
+            <div class="roster-search-bar">
+              <svg class="search-mini-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input
+                v-model="rosterSearchQuery"
+                type="search"
+                placeholder="Rechercher par nom..."
+                class="roster-search-input"
+              />
+            </div>
+
+            <div class="roster-status-pills">
+              <button
+                type="button"
+                :class="['status-pill-btn', { active: rosterStatusFilter === 'ALL' }]"
+                @click="rosterStatusFilter = 'ALL'"
+              >
+                Tous ({{ characters.length }})
+              </button>
+              <button
+                type="button"
+                :class="['status-pill-btn', { active: rosterStatusFilter === 'OWNED' }]"
+                @click="rosterStatusFilter = 'OWNED'"
+              >
+                ★ Possédés
+              </button>
+            </div>
+          </div>
+
+          <!-- Filtres Éléments & Rareté avec VRAIS insignes officiels Yatta -->
+          <div class="roster-filters-row">
+            <span class="roster-filter-label">Élément & Rareté :</span>
+            <div class="roster-pill-group">
+              <button
+                v-for="el in elementsList"
+                :key="el"
+                type="button"
+                :class="['roster-filter-chip', { active: rosterElementFilter === el }]"
+                :style="rosterElementFilter === el && el !== 'ALL' ? { borderColor: ELEMENT_COLORS[el], color: ELEMENT_COLORS[el], background: `${ELEMENT_COLORS[el]}18` } : {}"
+                @click="rosterElementFilter = el"
               >
                 <img
-                  :src="getIconUrl(char.icon)"
-                  :alt="char.name"
-                  class="avatar-img"
-                  loading="lazy"
+                  v-if="el !== 'ALL'"
+                  :src="getElementIconUrl(el)"
+                  alt=""
+                  aria-hidden="true"
+                  class="filter-chip-img"
                 />
-                <img :src="getElementIconUrl(char.element)" class="char-mini-el" />
-              </div>
+                <span>{{ el === 'ALL' ? 'Tous' : (ELEMENT_LABELS[el] || el) }}</span>
+              </button>
 
-              <span class="roster-name">{{ char.name }}</span>
+              <div class="roster-sep"></div>
 
-              <!-- Badge d'assignation ou de blocage -->
-              <span
-                v-if="getOtherTeamAssignment(Number(char.id.replace('avatar_', '')), activeSlot.teamKey)"
-                class="roster-badge badge-locked"
+              <button
+                v-for="r in ['ALL', '5', '4']"
+                :key="r"
+                type="button"
+                :class="['roster-filter-chip', { active: rosterRarityFilter === r }]"
+                @click="rosterRarityFilter = r"
               >
-                T{{ getOtherTeamAssignment(Number(char.id.replace('avatar_', '')), activeSlot.teamKey) }}
-              </span>
+                {{ r === 'ALL' ? 'Toutes' : `${r}★` }}
+              </button>
+            </div>
+          </div>
 
-              <span
-                v-else-if="characterTeamOwners[Number(char.id.replace('avatar_', ''))]?.length > 0"
-                class="roster-badge badge-assigned"
+          <!-- Filtres Armes avec icônes officielles SVG -->
+          <div class="roster-filters-row">
+            <span class="roster-filter-label">Arme :</span>
+            <div class="roster-pill-group">
+              <button
+                v-for="w in weaponsList"
+                :key="w"
+                type="button"
+                :class="['roster-filter-chip', { active: rosterWeaponFilter === w }]"
+                @click="rosterWeaponFilter = w"
               >
-                T{{ characterTeamOwners[Number(char.id.replace('avatar_', ''))][0] + 1 }}
-              </span>
-            </button>
-
-            <div v-if="filteredRoster.length === 0" class="empty-roster-hint">
-              Aucun personnage ne correspond à vos filtres.
+                <svg v-if="w !== 'ALL'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="el-svg">
+                  <path :d="WEAPON_SVGS[w]" />
+                </svg>
+                <span>{{ w === 'ALL' ? 'Toutes' : WEAPON_LABELS[w] }}</span>
+              </button>
             </div>
           </div>
         </div>
-      </div>
 
+        <div class="roster-grid">
+          <button
+            v-for="char in filteredRoster"
+            :key="char.id"
+            type="button"
+            :class="[
+              'roster-card',
+              {
+                assigned: characterTeamOwners[Number(char.id.replace('avatar_', ''))]?.length > 0,
+                locked: getOtherTeamAssignment(Number(char.id.replace('avatar_', '')), activeSlot.teamKey)
+              }
+            ]"
+            :disabled="Boolean(getOtherTeamAssignment(Number(char.id.replace('avatar_', '')), activeSlot.teamKey))"
+            @click="pickCharacterFromRoster(char)"
+          >
+            <div
+              class="roster-avatar-wrap"
+              :style="{
+                borderColor: ELEMENT_COLORS[char.element] || '#7CF0D0',
+                boxShadow: `0 0 12px ${ELEMENT_COLORS[char.element]}35`
+              }"
+            >
+              <img
+                :src="getIconUrl(char.icon)"
+                :alt="char.name"
+                class="avatar-img"
+                loading="lazy"
+              />
+              <img :src="getElementIconUrl(char.element)" class="char-mini-el" />
+            </div>
+
+            <span class="roster-name">{{ char.name }}</span>
+
+            <!-- Badge d'assignation ou de blocage -->
+            <span
+              v-if="getOtherTeamAssignment(Number(char.id.replace('avatar_', '')), activeSlot.teamKey)"
+              class="roster-badge badge-locked"
+            >
+              T{{ getOtherTeamAssignment(Number(char.id.replace('avatar_', '')), activeSlot.teamKey) }}
+            </span>
+
+            <span
+              v-else-if="characterTeamOwners[Number(char.id.replace('avatar_', ''))]?.length > 0"
+              class="roster-badge badge-assigned"
+            >
+              T{{ characterTeamOwners[Number(char.id.replace('avatar_', ''))][0] + 1 }}
+            </span>
+          </button>
+
+          <div v-if="filteredRoster.length === 0" class="empty-roster-hint">
+            Aucun personnage ne correspond à vos filtres.
+          </div>
+        </div>
+      </aside>
     </div>
 
     <!-- ============================================================= -->
@@ -1175,33 +1173,23 @@ const filteredRoster = computed(() => {
   color: var(--accent-gold);
 }
 
-/* Layout principal */
+/* Layout principal : Équipes à Gauche & Roster à Droite */
 .endgame-main-layout {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.95fr);
   gap: 1.5rem;
   align-items: flex-start;
   position: relative;
 }
 
-.endgame-columns-area {
-  flex: 1;
-  min-width: 0;
+.teams-vertical-stack {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
+  min-width: 0;
 }
 
-.teams-columns-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem;
-}
-
-.teams-columns-grid.three-columns {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.team-column-card {
+.team-stack-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -1209,6 +1197,12 @@ const filteredRoster = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.column-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .column-header {
@@ -1524,16 +1518,15 @@ const filteredRoster = computed(() => {
 }
 
 .btn-open-import {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   background: var(--bg-dark);
   border: 1px solid var(--border-subtle);
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 600;
-  padding: 0.55rem;
+  padding: 0.35rem 0.65rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1544,7 +1537,7 @@ const filteredRoster = computed(() => {
   border-color: var(--accent-mint);
 }
 
-/* Panneau de sélection du Roster */
+/* Panneau de sélection du Roster (Sticky à droite) */
 .roster-selection-panel {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -1553,6 +1546,10 @@ const filteredRoster = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2rem);
+  box-sizing: border-box;
 }
 
 .roster-panel-header {
@@ -1709,14 +1706,15 @@ const filteredRoster = computed(() => {
   flex-shrink: 0;
 }
 
-/* Grille de sélection de personnages agrandie */
+/* Grille de sélection de personnages */
 .roster-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
-  gap: 0.75rem;
-  max-height: 380px;
+  grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
+  gap: 0.65rem;
   overflow-y: auto;
   padding-right: 0.35rem;
+  max-height: calc(100vh - 350px);
+  min-height: 260px;
 }
 
 .roster-card {
@@ -2126,15 +2124,19 @@ const filteredRoster = computed(() => {
   color: var(--text-dim);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .period-banner {
     grid-template-columns: 1fr;
   }
-  .teams-columns-grid {
+  .endgame-main-layout {
     grid-template-columns: 1fr;
   }
-  .endgame-main-layout {
-    flex-direction: column;
+  .roster-selection-panel {
+    position: static;
+    max-height: none;
+  }
+  .roster-grid {
+    max-height: 420px;
   }
 }
 </style>

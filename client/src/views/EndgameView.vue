@@ -551,21 +551,33 @@ const filteredRoster = computed(() => {
                       <!-- Arme -->
                       <div
                         v-if="weaponsMap[loadoutsMap[slot.loadout_id].weapon_id]"
-                        class="mini-gear-chip"
+                        :class="['mini-gear-chip', `rarity-${weaponsMap[loadoutsMap[slot.loadout_id].weapon_id].rarity || 4}`]"
                         :title="`${weaponsMap[loadoutsMap[slot.loadout_id].weapon_id].name} (R${loadoutsMap[slot.loadout_id].weapon_refinement || 1})`"
                       >
                         <img :src="getIconUrl(weaponsMap[loadoutsMap[slot.loadout_id].weapon_id].icon)" class="mini-gear-img" />
-                        <span class="mini-gear-text">R{{ loadoutsMap[slot.loadout_id].weapon_refinement || 1 }}</span>
+                        <span class="mini-gear-text tag-refinement">R{{ loadoutsMap[slot.loadout_id].weapon_refinement || 1 }}</span>
                       </div>
 
-                      <!-- Artéfact Set -->
+                      <!-- Artéfact Set 1 -->
                       <div
                         v-if="relicsMap[loadoutsMap[slot.loadout_id].artifact_set_1_id]"
-                        class="mini-gear-chip"
+                        :class="['mini-gear-chip', `rarity-${relicsMap[loadoutsMap[slot.loadout_id].artifact_set_1_id].rarity || 5}`]"
                         :title="relicsMap[loadoutsMap[slot.loadout_id].artifact_set_1_id].name"
                       >
-                        <img :src="getIconUrl(relicsMap[loadoutsMap[slot.loadout_id].artifact_set_1_id].icon)" class="mini-gear-img" />
-                        <span class="mini-gear-text">{{ loadoutsMap[slot.loadout_id].artifact_set_2_id ? '2p' : '4p' }}</span>
+                        <img :src="getIconUrl(relicsMap[loadoutsMap[slot.loadout_id].artifact_set_1_id].icon, 'reliquary')" class="mini-gear-img" />
+                        <span :class="['mini-gear-text', loadoutsMap[slot.loadout_id].artifact_set_2_id ? 'tag-relic-2p' : 'tag-relic-4p']">
+                          {{ loadoutsMap[slot.loadout_id].artifact_set_2_id ? '2p' : '4p' }}
+                        </span>
+                      </div>
+
+                      <!-- Artéfact Set 2 (si 2+2) -->
+                      <div
+                        v-if="loadoutsMap[slot.loadout_id].artifact_set_2_id && relicsMap[loadoutsMap[slot.loadout_id].artifact_set_2_id]"
+                        :class="['mini-gear-chip', `rarity-${relicsMap[loadoutsMap[slot.loadout_id].artifact_set_2_id].rarity || 5}`]"
+                        :title="relicsMap[loadoutsMap[slot.loadout_id].artifact_set_2_id].name"
+                      >
+                        <img :src="getIconUrl(relicsMap[loadoutsMap[slot.loadout_id].artifact_set_2_id].icon, 'reliquary')" class="mini-gear-img" />
+                        <span class="mini-gear-text tag-relic-2p">2p</span>
                       </div>
                     </div>
 
@@ -1291,39 +1303,70 @@ const filteredRoster = computed(() => {
 
 .slot-gear-chips {
   display: flex;
-  gap: 0.25rem;
+  gap: 0.35rem;
   justify-content: center;
+  align-items: center;
 }
 
 .mini-gear-chip {
   position: relative;
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
   background: var(--bg-dark);
   border: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  transition: transform 0.15s ease;
+}
+
+.mini-gear-chip:hover {
+  transform: translateY(-1px);
+}
+
+.mini-gear-chip.rarity-5 {
+  border-color: rgba(243, 197, 82, 0.7);
+  background: radial-gradient(circle, #7e4b17 0%, #151822 100%);
+}
+
+.mini-gear-chip.rarity-4 {
+  border-color: rgba(185, 140, 255, 0.7);
+  background: radial-gradient(circle, #52296e 0%, #151822 100%);
 }
 
 .mini-gear-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  padding: 2px;
 }
 
 .mini-gear-text {
   position: absolute;
   bottom: 0;
   right: 0;
-  background: rgba(0, 0, 0, 0.85);
-  font-size: 0.5rem;
+  font-size: 0.55rem;
   font-weight: 800;
-  color: var(--accent-mint);
   line-height: 1;
-  padding: 0 1px;
+  padding: 1px 3px;
+  border-top-left-radius: 3px;
+}
+
+.mini-gear-text.tag-refinement {
+  background: #F3C552;
+  color: #0B0D12;
+}
+
+.mini-gear-text.tag-relic-4p {
+  background: #7CF0D0;
+  color: #0B0D12;
+}
+
+.mini-gear-text.tag-relic-2p {
+  background: #E8A838;
+  color: #0B0D12;
 }
 
 .btn-inspect-slot {

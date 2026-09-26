@@ -393,37 +393,44 @@ async function deleteEditorTeam() {
                   {{ charactersMap[team[`slot${s}_character_id`]].name }}
                 </span>
 
-                <!-- Vignettes d'équipements : Arme + Set d'artéfacts -->
+                <!-- Vignettes d'équipements : Arme + Set d'artéfacts agrandis -->
                 <div class="slot-gear-preview" v-if="team[`slot${s}_loadout_id`] && loadoutsMap[team[`slot${s}_loadout_id`]]">
                   <!-- Arme -->
                   <div
                     v-if="weaponsMap[loadoutsMap[team[`slot${s}_loadout_id`]].weapon_id]"
-                    class="gear-icon-chip"
+                    :class="['gear-icon-chip', `rarity-${weaponsMap[loadoutsMap[team[`slot${s}_loadout_id`]].weapon_id].rarity || 4}`]"
                     :title="`${weaponsMap[loadoutsMap[team[`slot${s}_loadout_id`]].weapon_id].name} (R${loadoutsMap[team[`slot${s}_loadout_id`]].weapon_refinement || 1})`"
                   >
                     <img :src="getIconUrl(weaponsMap[loadoutsMap[team[`slot${s}_loadout_id`]].weapon_id].icon)" class="gear-img" />
-                    <span class="gear-sub-tag">R{{ loadoutsMap[team[`slot${s}_loadout_id`]].weapon_refinement || 1 }}</span>
+                    <span class="gear-sub-tag tag-refinement">R{{ loadoutsMap[team[`slot${s}_loadout_id`]].weapon_refinement || 1 }}</span>
                   </div>
 
                   <!-- Artéfact Set 1 -->
                   <div
                     v-if="relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_1_id]"
-                    class="gear-icon-chip"
+                    :class="['gear-icon-chip', `rarity-${relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_1_id].rarity || 5}`]"
                     :title="`${relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_1_id].name}`"
                   >
-                    <img :src="getIconUrl(relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_1_id].icon)" class="gear-img" />
-                    <span class="gear-sub-tag">{{ loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id ? '2p' : '4p' }}</span>
+                    <img :src="getIconUrl(relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_1_id].icon, 'reliquary')" class="gear-img" />
+                    <span :class="['gear-sub-tag', loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id ? 'tag-relic-2p' : 'tag-relic-4p']">
+                      {{ loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id ? '2p' : '4p' }}
+                    </span>
                   </div>
 
                   <!-- Artéfact Set 2 (si 2+2) -->
                   <div
                     v-if="loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id && relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id]"
-                    class="gear-icon-chip"
+                    :class="['gear-icon-chip', `rarity-${relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id].rarity || 5}`]"
                     :title="`${relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id].name}`"
                   >
-                    <img :src="getIconUrl(relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id].icon)" class="gear-img" />
-                    <span class="gear-sub-tag">2p</span>
+                    <img :src="getIconUrl(relicsMap[loadoutsMap[team[`slot${s}_loadout_id`]].artifact_set_2_id].icon, 'reliquary')" class="gear-img" />
+                    <span class="gear-sub-tag tag-relic-2p">2p</span>
                   </div>
+                </div>
+
+                <!-- Espace réservé si aucun build assigné pour garder l'alignement parfait -->
+                <div v-else class="slot-gear-empty">
+                  <span class="gear-empty-text">Aucun équipement</span>
                 </div>
 
                 <!-- Bouton Nom du Build qui ouvre la modale de sélection de build -->
@@ -937,12 +944,13 @@ async function deleteEditorTeam() {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 0.85rem 0.6rem;
+  padding: 1rem 0.65rem 0.85rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.55rem;
   text-align: center;
+  min-height: 215px;
 }
 
 .slot-avatar-container {
@@ -998,56 +1006,109 @@ async function deleteEditorTeam() {
   max-width: 100%;
 }
 
-/* Vignettes d'équipements */
+/* Vignettes d'équipements agrandies (44px) */
 .slot-gear-preview {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.55rem;
   align-items: center;
   justify-content: center;
+  min-height: 44px;
+}
+
+.slot-gear-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.gear-empty-text {
+  font-size: 0.68rem;
+  color: #4A5264;
+  font-style: italic;
 }
 
 .gear-icon-chip {
   position: relative;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
   background: var(--bg-dark);
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gear-icon-chip:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+.gear-icon-chip.rarity-5 {
+  border-color: rgba(243, 197, 82, 0.7);
+  background: radial-gradient(circle, #7e4b17 0%, #151822 100%);
+  box-shadow: 0 0 10px rgba(243, 197, 82, 0.2);
+}
+
+.gear-icon-chip.rarity-4 {
+  border-color: rgba(185, 140, 255, 0.7);
+  background: radial-gradient(circle, #52296e 0%, #151822 100%);
+  box-shadow: 0 0 8px rgba(185, 140, 255, 0.15);
+}
+
+.gear-icon-chip.rarity-3 {
+  border-color: rgba(66, 153, 225, 0.7);
+  background: radial-gradient(circle, #1e457e 0%, #151822 100%);
 }
 
 .gear-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  padding: 3px;
 }
 
 .gear-sub-tag {
   position: absolute;
   bottom: 0;
   right: 0;
-  background: rgba(0, 0, 0, 0.8);
-  font-size: 0.55rem;
+  font-size: 0.6rem;
   font-weight: 800;
-  padding: 0 2px;
-  line-height: 1;
-  color: var(--accent-mint);
-  border-top-left-radius: 3px;
+  padding: 1px 4px;
+  line-height: 1.1;
+  border-top-left-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.gear-sub-tag.tag-refinement {
+  background: #F3C552;
+  color: #0B0D12;
+}
+
+.gear-sub-tag.tag-relic-4p {
+  background: #7CF0D0;
+  color: #0B0D12;
+}
+
+.gear-sub-tag.tag-relic-2p {
+  background: #E8A838;
+  color: #0B0D12;
 }
 
 /* Pilule du build */
 .slot-loadout-pill {
+  margin-top: auto;
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
   border: 1px solid;
   border-radius: 9999px;
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-weight: 700;
-  padding: 0.25rem 0.6rem;
+  padding: 0.28rem 0.75rem;
   cursor: pointer;
   max-width: 100%;
   transition: all 0.2s ease;

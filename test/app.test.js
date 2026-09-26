@@ -398,6 +398,69 @@ describe('Genshin Dashboard - Tests du Domaine & SQLite', () => {
     assert.equal(row.talent_burst_target, 10);
     assert.equal(row.artifact_action, 'none');
   });
+
+  it('devrait filtrer les personnages et les armes pour la roadmap de vœux avec recherche et critères multiples', async () => {
+    const { filterWishCharacters, filterWishWeapons } = await import('../client/src/api.js');
+
+    const sampleChars = [
+      { id: 'avatar_10000046', name: 'Hu Tao', element: 'Pyro', rarity: 5, weapon_type: 'WEAPON_POLE' },
+      { id: 'avatar_10000052', name: 'Shogun Raiden', element: 'Electro', rarity: 5, weapon_type: 'WEAPON_POLE' },
+      { id: 'avatar_10000034', name: 'Noëlle', element: 'Geo', rarity: 4, weapon_type: 'WEAPON_CLAYMORE' },
+      { id: 'avatar_10000089', name: 'Furina', element: 'Hydro', rarity: 5, weapon_type: 'WEAPON_SWORD_ONE_HAND' },
+      { id: 'avatar_10000021', name: 'Xiangling', element: 'Pyro', rarity: 4, weapon_type: 'WEAPON_POLE' }
+    ];
+
+    const sampleOwnership = {
+      10000046: { is_owned: 1 }, // Hu Tao possédée
+      10000034: { is_owned: 1 }  // Noëlle possédée
+      // Shogun Raiden, Furina, Xiangling non possédées
+    };
+
+    // 1. Recherche insensible à la casse et aux accents
+    const searchNoelle = filterWishCharacters(sampleChars, { query: 'noelle' });
+    assert.equal(searchNoelle.length, 1);
+    assert.equal(searchNoelle[0].name, 'Noëlle');
+
+    // 2. Filtre par Élément (Pyro)
+    const pyroChars = filterWishCharacters(sampleChars, { element: 'Pyro' });
+    assert.equal(pyroChars.length, 2); // Hu Tao & Xiangling
+
+    // 3. Filtre par Rareté (5★)
+    const fiveStarChars = filterWishCharacters(sampleChars, { rarity: '5' });
+    assert.equal(fiveStarChars.length, 3); // Hu Tao, Shogun Raiden, Furina
+
+    // 4. Filtre par Type d'arme (Arme d'hast)
+    const polearmChars = filterWishCharacters(sampleChars, { weapon: 'WEAPON_POLE' });
+    assert.equal(polearmChars.length, 3); // Hu Tao, Shogun Raiden, Xiangling
+
+    // 5. Filtre par Possession (Possédés vs Non possédés)
+    const ownedChars = filterWishCharacters(sampleChars, { ownershipFilter: 'OWNED', ownership: sampleOwnership });
+    assert.equal(ownedChars.length, 2);
+    assert.deepEqual(ownedChars.map(c => c.name), ['Hu Tao', 'Noëlle']);
+
+    const notOwnedChars = filterWishCharacters(sampleChars, { ownershipFilter: 'NOT_OWNED', ownership: sampleOwnership });
+    assert.equal(notOwnedChars.length, 3);
+
+    // 6. Armes : recherche, rareté et type
+    const sampleWeapons = [
+      { id: 'weapon_13501', name: 'Bâton de Homa', rarity: 5, weapon_type: 'WEAPON_POLE' },
+      { id: 'weapon_11503', name: 'Serment de la liberté', rarity: 5, weapon_type: 'WEAPON_SWORD_ONE_HAND' },
+      { id: 'weapon_13401', name: 'Fléau du dragon', rarity: 4, weapon_type: 'WEAPON_POLE' },
+      { id: 'weapon_12301', name: 'Épée de la raison', rarity: 3, weapon_type: 'WEAPON_SWORD_ONE_HAND' }
+    ];
+
+    const homa = filterWishWeapons(sampleWeapons, { query: 'homa' });
+    assert.equal(homa.length, 1);
+    assert.equal(homa[0].name, 'Bâton de Homa');
+
+    const polearms = filterWishWeapons(sampleWeapons, { weaponType: 'WEAPON_POLE' });
+    assert.equal(polearms.length, 2);
+    assert.equal(polearms[0].rarity, 5); // Trié par rareté décroissante
+
+    const swords5 = filterWishWeapons(sampleWeapons, { weaponType: 'WEAPON_SWORD_ONE_HAND', rarity: '5' });
+    assert.equal(swords5.length, 1);
+    assert.equal(swords5[0].name, 'Serment de la liberté');
+  });
 });
 
 

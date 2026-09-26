@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import {
   getIconUrl,
+  getElementIconUrl,
   ELEMENT_COLORS,
   ELEMENT_LABELS,
   WEAPON_LABELS,
@@ -10,7 +11,9 @@ import {
   createWishlistItem,
   updateWishlistItem,
   deleteWishlistItem,
-  reorderWishlist
+  reorderWishlist,
+  filterWishCharacters,
+  filterWishWeapons
 } from '../api.js';
 
 const props = defineProps({
@@ -21,6 +24,10 @@ const props = defineProps({
   weapons: {
     type: Array,
     default: () => []
+  },
+  ownership: {
+    type: Object,
+    default: () => ({})
   }
 });
 
@@ -137,6 +144,47 @@ async function removeItem(id) {
 }
 
 // -------------------------------------------------------------
+// FILTRAGE ET RECHERCHE DANS LA MODALE D'AJOUT
+// -------------------------------------------------------------
+const elementsList = ['ALL', 'Pyro', 'Hydro', 'Anemo', 'Electro', 'Dendro', 'Cryo', 'Geo'];
+const weaponsList = [
+  'ALL',
+  'WEAPON_SWORD_ONE_HAND',
+  'WEAPON_CLAYMORE',
+  'WEAPON_POLE',
+  'WEAPON_CATALYST',
+  'WEAPON_BOW'
+];
+
+const charSearchQuery = ref('');
+const charOwnershipFilter = ref('ALL'); // 'ALL' | 'NOT_OWNED' | 'OWNED'
+const charElementFilter = ref('ALL');
+const charRarityFilter = ref('ALL'); // 'ALL' | '5' | '4'
+const charWeaponFilter = ref('ALL');
+
+const weaponSearchQuery = ref('');
+const weaponTypeFilter = ref('ALL');
+const weaponRarityFilter = ref('ALL'); // 'ALL' | '5' | '4' | '3'
+
+const filteredCharacters = computed(() => {
+  return filterWishCharacters(props.characters, {
+    query: charSearchQuery.value,
+    element: charElementFilter.value,
+    rarity: charRarityFilter.value,
+    weapon: charWeaponFilter.value,
+    ownershipFilter: charOwnershipFilter.value,
+    ownership: props.ownership
+  });
+});
+
+const filteredWeapons = computed(() => {
+  return filterWishWeapons(props.weapons, {
+    query: weaponSearchQuery.value,
+    weaponType: weaponTypeFilter.value,
+    rarity: weaponRarityFilter.value
+  });
+});
+
 // MODALE D'AJOUT RAPIDE
 // -------------------------------------------------------------
 const addForm = ref({
@@ -150,6 +198,15 @@ const addForm = ref({
 });
 
 function openModal() {
+  charSearchQuery.value = '';
+  charOwnershipFilter.value = 'ALL';
+  charElementFilter.value = 'ALL';
+  charRarityFilter.value = 'ALL';
+  charWeaponFilter.value = 'ALL';
+  weaponSearchQuery.value = '';
+  weaponTypeFilter.value = 'ALL';
+  weaponRarityFilter.value = 'ALL';
+
   const defChar = props.characters[0];
   addForm.value = {
     item_type: 'character',
@@ -161,6 +218,23 @@ function openModal() {
     notes: ''
   };
   showAddModal.value = true;
+}
+
+function changeItemType(type) {
+  const prevType = addForm.value.item_type;
+  addForm.value.item_type = type;
+
+  if (type === 'weapon' && prevType !== 'weapon') {
+    const targetWeapon = filteredWeapons.value[0] || props.weapons[0];
+    if (targetWeapon) {
+      selectWeaponForWish(targetWeapon);
+    }
+  } else if (type !== 'weapon' && prevType === 'weapon') {
+    const targetChar = filteredCharacters.value[0] || props.characters[0];
+    if (targetChar) {
+      selectCharForWish(targetChar);
+    }
+  }
 }
 
 function selectCharForWish(c) {
@@ -550,21 +624,21 @@ async function handleSaveNewWish() {
               <button
                 type="button"
                 :class="['kind-choice', { active: addForm.item_type === 'character' }]"
-                @click="addForm.item_type = 'character'"
+                @click="changeItemType('character')"
               >
                 Personnage
               </button>
               <button
                 type="button"
                 :class="['kind-choice', { active: addForm.item_type === 'constellation' }]"
-                @click="addForm.item_type = 'constellation'"
+                @click="changeItemType('constellation')"
               >
                 Constellation
               </button>
               <button
                 type="button"
                 :class="['kind-choice', { active: addForm.item_type === 'weapon' }]"
-                @click="addForm.item_type = 'weapon'"
+                @click="changeItemType('weapon')"
               >
                 Arme
               </button>
@@ -608,16 +682,107 @@ async function handleSaveNewWish() {
             </div>
           </div>
 
-          <!-- Grille de sélection de Personnage ou Arme -->
-          <div class="form-group">
-            <label class="input-label">
-              {{ addForm.item_type === 'weapon' ? 'Sélectionnez l\'arme' : 'Sélectionnez le personnage' }}
-            </label>
+          <!-- Grille de sélection de Personnage avec Recherche & Filtres -->
+          <div v-if="addForm.item_type !== 'weapon'" class="form-group">
+            <div class="picker-section-header">
+              <label class="input-label">Sélectionnez le personnage</label>
+              <span class="picker-count-badge">{{ filteredCharacters.length }} disponible{{ filteredCharacters.length > 1 ? 's' : '' }}</span>
+            </div>
+
+            <!-- Filtres Personnages -->
+            <div class="picker-filters-container">
+              <!-- Recherche textuelle + Statut Possession -->
+              <div class="filter-row-compact">
+                <div class="filter-search-box">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <input
+                    v-model="charSearchQuery"
+                    type="search"
+                    placeholder="Rechercher un personnage..."
+                    class="filter-search-input"
+                  />
+                </div>
+
+                <div class="filter-pills-wrap">
+                  <button
+                    type="button"
+                    :class="['filter-chip-btn', { active: charOwnershipFilter === 'ALL' }]"
+                    @click="charOwnershipFilter = 'ALL'"
+                  >
+                    Tous
+                  </button>
+                  <button
+                    type="button"
+                    :class="['filter-chip-btn', { active: charOwnershipFilter === 'NOT_OWNED' }]"
+                    @click="charOwnershipFilter = 'NOT_OWNED'"
+                  >
+                    ★ Non possédés
+                  </button>
+                  <button
+                    type="button"
+                    :class="['filter-chip-btn', { active: charOwnershipFilter === 'OWNED' }]"
+                    @click="charOwnershipFilter = 'OWNED'"
+                  >
+                    ★ Possédés
+                  </button>
+                </div>
+              </div>
+
+              <!-- Éléments & Rareté -->
+              <div class="filter-row-compact">
+                <div class="filter-pills-wrap flex-wrap">
+                  <button
+                    v-for="el in elementsList"
+                    :key="el"
+                    type="button"
+                    :class="['filter-chip-btn', 'el-chip-btn', { active: charElementFilter === el }]"
+                    :style="charElementFilter === el && el !== 'ALL' ? { borderColor: ELEMENT_COLORS[el], color: ELEMENT_COLORS[el], background: `${ELEMENT_COLORS[el]}20` } : {}"
+                    @click="charElementFilter = el"
+                  >
+                    <img v-if="el !== 'ALL'" :src="getElementIconUrl(el)" class="filter-mini-icon" />
+                    <span>{{ el === 'ALL' ? 'Tous éléments' : (ELEMENT_LABELS[el] || el) }}</span>
+                  </button>
+
+                  <div class="filter-v-sep"></div>
+
+                  <button
+                    v-for="r in ['ALL', '5', '4']"
+                    :key="r"
+                    type="button"
+                    :class="['filter-chip-btn', { active: charRarityFilter === r }]"
+                    @click="charRarityFilter = r"
+                  >
+                    {{ r === 'ALL' ? 'Toutes' : `${r}★` }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Types d'armes -->
+              <div class="filter-row-compact">
+                <div class="filter-pills-wrap flex-wrap">
+                  <button
+                    v-for="w in weaponsList"
+                    :key="w"
+                    type="button"
+                    :class="['filter-chip-btn', { active: charWeaponFilter === w }]"
+                    @click="charWeaponFilter = w"
+                  >
+                    <svg v-if="w !== 'ALL'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="filter-w-svg">
+                      <path :d="WEAPON_SVGS[w]" />
+                    </svg>
+                    <span>{{ w === 'ALL' ? 'Toutes armes' : WEAPON_LABELS[w] }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
 
             <!-- Grille des personnages -->
-            <div v-if="addForm.item_type !== 'weapon'" class="pick-grid-scroll scroll">
+            <div class="pick-grid-scroll scroll">
               <button
-                v-for="c in characters"
+                v-for="c in filteredCharacters"
                 :key="c.id"
                 type="button"
                 :class="['pick-tile', { active: addForm.name === c.name }]"
@@ -627,13 +792,75 @@ async function handleSaveNewWish() {
                   <img :src="getIconUrl(c.icon)" class="avatar-img" />
                 </div>
                 <span class="tile-name">{{ c.name }}</span>
+                <span v-if="ownership[Number(c.id.replace('avatar_', ''))]?.is_owned" class="tile-owned-star" title="Possédé">★</span>
               </button>
+
+              <div v-if="filteredCharacters.length === 0" class="empty-filter-notice">
+                Aucun personnage ne correspond à vos filtres.
+              </div>
+            </div>
+          </div>
+
+          <!-- Grille de sélection d'Arme avec Recherche & Filtres -->
+          <div v-else class="form-group">
+            <div class="picker-section-header">
+              <label class="input-label">Sélectionnez l'arme</label>
+              <span class="picker-count-badge">{{ filteredWeapons.length }} disponible{{ filteredWeapons.length > 1 ? 's' : '' }}</span>
+            </div>
+
+            <!-- Filtres Armes -->
+            <div class="picker-filters-container">
+              <!-- Recherche textuelle + Rareté -->
+              <div class="filter-row-compact">
+                <div class="filter-search-box">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  <input
+                    v-model="weaponSearchQuery"
+                    type="search"
+                    placeholder="Rechercher une arme..."
+                    class="filter-search-input"
+                  />
+                </div>
+
+                <div class="filter-pills-wrap">
+                  <button
+                    v-for="r in ['ALL', '5', '4', '3']"
+                    :key="r"
+                    type="button"
+                    :class="['filter-chip-btn', { active: weaponRarityFilter === r }]"
+                    @click="weaponRarityFilter = r"
+                  >
+                    {{ r === 'ALL' ? 'Toutes' : `${r}★` }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Types d'armes -->
+              <div class="filter-row-compact">
+                <div class="filter-pills-wrap flex-wrap">
+                  <button
+                    v-for="w in weaponsList"
+                    :key="w"
+                    type="button"
+                    :class="['filter-chip-btn', { active: weaponTypeFilter === w }]"
+                    @click="weaponTypeFilter = w"
+                  >
+                    <svg v-if="w !== 'ALL'" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="filter-w-svg">
+                      <path :d="WEAPON_SVGS[w]" />
+                    </svg>
+                    <span>{{ w === 'ALL' ? 'Tous types' : WEAPON_LABELS[w] }}</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <!-- Grille des armes -->
-            <div v-else class="pick-grid-scroll scroll">
+            <div class="pick-grid-scroll weapons-grid-scroll scroll">
               <button
-                v-for="w in weapons"
+                v-for="w in filteredWeapons"
                 :key="w.id"
                 type="button"
                 :class="['pick-tile-weapon', { active: addForm.name === w.name }]"
@@ -644,9 +871,13 @@ async function handleSaveNewWish() {
                 </div>
                 <div class="tile-w-info">
                   <span class="tile-w-name">{{ w.name }}</span>
-                  <span class="tile-w-sub">{{ WEAPON_LABELS[w.weapon_type] || '' }}</span>
+                  <span class="tile-w-sub">{{ WEAPON_LABELS[w.weapon_type] || '' }} · {{ w.rarity }}★</span>
                 </div>
               </button>
+
+              <div v-if="filteredWeapons.length === 0" class="empty-filter-notice">
+                Aucune arme ne correspond à vos filtres.
+              </div>
             </div>
           </div>
 
@@ -1437,11 +1668,127 @@ async function handleSaveNewWish() {
   border-color: #C29BFF;
 }
 
+.picker-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.picker-count-badge {
+  font-size: 0.72rem;
+  color: #8F97AA;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.picker-filters-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: #0B0D12;
+  border: 1px solid #1F2430;
+  border-radius: 12px;
+  padding: 0.65rem;
+}
+
+.filter-row-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.filter-search-box {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: 1;
+  min-width: 170px;
+  height: 32px;
+  padding: 0 0.65rem;
+  background: #141821;
+  border: 1px solid #222734;
+  border-radius: 7px;
+  color: #8F97AA;
+  transition: border-color 0.15s ease;
+}
+
+.filter-search-box:focus-within {
+  border-color: #7CF0D0;
+  color: #7CF0D0;
+}
+
+.filter-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #E7E9EE;
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.filter-search-input::placeholder {
+  color: #555E70;
+}
+
+.filter-pills-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.filter-pills-wrap.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.filter-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 28px;
+  padding: 0 0.55rem;
+  border-radius: 6px;
+  border: 1px solid #222734;
+  background: #141821;
+  color: #8F97AA;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filter-chip-btn:hover {
+  border-color: #3B4354;
+  color: #E7E9EE;
+}
+
+.filter-chip-btn.active {
+  background: rgba(124, 240, 208, 0.12);
+  border-color: #7CF0D0;
+  color: #7CF0D0;
+}
+
+.filter-mini-icon {
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
+}
+
+.filter-w-svg {
+  flex-shrink: 0;
+}
+
+.filter-v-sep {
+  width: 1px;
+  height: 16px;
+  background: #262B38;
+  margin: 0 0.2rem;
+}
+
 .pick-grid-scroll {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
   gap: 0.5rem;
-  max-height: 240px;
+  max-height: 220px;
   overflow-y: auto;
   padding: 0.35rem;
   background: #0B0D12;
@@ -1449,7 +1796,12 @@ async function handleSaveNewWish() {
   border-radius: 12px;
 }
 
+.weapons-grid-scroll {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+}
+
 .pick-tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1460,11 +1812,24 @@ async function handleSaveNewWish() {
   border: 1px solid #222734;
   color: #E7E9EE;
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pick-tile:hover {
+  border-color: #3B4354;
 }
 
 .pick-tile.active {
   border-color: #7CF0D0;
   background: rgba(124, 240, 208, 0.08);
+}
+
+.tile-owned-star {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  font-size: 0.7rem;
+  color: #F3C552;
 }
 
 .tile-avatar-ring {
@@ -1495,6 +1860,11 @@ async function handleSaveNewWish() {
   color: #E7E9EE;
   cursor: pointer;
   text-align: left;
+  transition: all 0.15s ease;
+}
+
+.pick-tile-weapon:hover {
+  border-color: #3B4354;
 }
 
 .pick-tile-weapon.active {
@@ -1503,8 +1873,8 @@ async function handleSaveNewWish() {
 }
 
 .tile-weapon-frame {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 7px;
   border: 1px solid;
   overflow: hidden;
@@ -1528,6 +1898,14 @@ async function handleSaveNewWish() {
 .tile-w-sub {
   font-size: 0.65rem;
   color: #8F97AA;
+}
+
+.empty-filter-notice {
+  grid-column: 1 / -1;
+  padding: 1.5rem;
+  text-align: center;
+  color: #7A8296;
+  font-size: 0.8rem;
 }
 
 .input-field {

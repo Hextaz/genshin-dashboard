@@ -138,6 +138,7 @@ onMounted(() => {
           v-show="currentView === 'wishlist'"
           :characters="characters"
           :weapons="weapons"
+          :ownership="ownership"
         />
       </template>
     </main>

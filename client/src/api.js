@@ -546,3 +546,88 @@ export async function deleteWishlistItem(id) {
   const res = await fetch(`${API_BASE}/wishlist/${id}`, { method: 'DELETE' });
   return res.json();
 }
+
+// -------------------------------------------------------------
+// FILTRAGE AVANCÉ DE PERSONNAGES & ARMES (ROADMAP DE VŒUX)
+// -------------------------------------------------------------
+export function filterWishCharacters(characters, { query = '', element = 'ALL', rarity = 'ALL', weapon = 'ALL', ownershipFilter = 'ALL', ownership = {} } = {}) {
+  const normQ = (query || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+  return (characters || []).filter(c => {
+    const rawId = Number(String(c.id).replace('avatar_', ''));
+    const isOwned = Boolean(ownership[rawId]?.is_owned);
+
+    // Filtre statut de possession
+    if (ownershipFilter === 'OWNED' && !isOwned) return false;
+    if (ownershipFilter === 'NOT_OWNED' && isOwned) return false;
+
+    // Filtre élément canonique
+    if (element !== 'ALL') {
+      const normCharEl = normalizeElement(c.element);
+      const normFilterEl = normalizeElement(element);
+      if (normCharEl !== normFilterEl) return false;
+    }
+
+    // Filtre rareté
+    if (rarity !== 'ALL' && c.rarity !== Number(rarity)) {
+      return false;
+    }
+
+    // Filtre type d'arme
+    if (weapon !== 'ALL' && c.weapon_type !== weapon) {
+      return false;
+    }
+
+    // Recherche textuelle insensible aux accents et à la casse
+    if (normQ) {
+      const normName = (c.name || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      if (!normName.includes(normQ)) return false;
+    }
+
+    return true;
+  }).sort((a, b) => {
+    if (b.rarity !== a.rarity) return b.rarity - a.rarity;
+    return (a.name || '').localeCompare(b.name || '', 'fr');
+  });
+}
+
+export function filterWishWeapons(weapons, { query = '', weaponType = 'ALL', rarity = 'ALL' } = {}) {
+  const normQ = (query || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+  return (weapons || []).filter(w => {
+    // Filtre type d'arme
+    if (weaponType !== 'ALL' && w.weapon_type !== weaponType) {
+      return false;
+    }
+
+    // Filtre rareté
+    if (rarity !== 'ALL' && w.rarity !== Number(rarity)) {
+      return false;
+    }
+
+    // Recherche textuelle insensible aux accents et à la casse
+    if (normQ) {
+      const normName = (w.name || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      if (!normName.includes(normQ)) return false;
+    }
+
+    return true;
+  }).sort((a, b) => {
+    if (b.rarity !== a.rarity) return b.rarity - a.rarity;
+    return (a.name || '').localeCompare(b.name || '', 'fr');
+  });
+}

@@ -127,6 +127,13 @@ db.exec(`
     value TEXT NOT NULL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS character_signatures (
+    character_id INTEGER PRIMARY KEY,
+    weapon_id INTEGER NOT NULL,
+    source TEXT DEFAULT 'seed', -- 'seed', 'auto_detected', 'manual'
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Migrations sécurisées pour bases existantes

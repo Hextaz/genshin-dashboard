@@ -314,6 +314,21 @@ export async function fetchCatalogItem(id) {
   return res.json();
 }
 
+// Armes signatures dynamiques (synchronisées depuis SQLite)
+export async function fetchSignatureWeapons() {
+  try {
+    const res = await fetch(`${API_BASE}/signature_weapons`);
+    if (res.ok) {
+      const data = await res.json();
+      Object.assign(SIGNATURE_WEAPONS, data);
+      return data;
+    }
+  } catch (e) {
+    // Mode hors-ligne ou fallback sur SIGNATURE_WEAPONS statique
+  }
+  return SIGNATURE_WEAPONS;
+}
+
 // Ownership (Personnages possédés ⭐)
 export async function fetchOwnership() {
   const res = await fetch(`${API_BASE}/ownership`);

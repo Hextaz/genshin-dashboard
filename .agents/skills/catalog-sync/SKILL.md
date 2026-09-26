@@ -33,3 +33,6 @@ npm run sync
 ### Intégrité des données utilisateur :
 - La synchronisation utilise `INSERT OR REPLACE INTO catalog_items`.
 - Les tables utilisateur (`character_loadouts`, `teams`, `upgrade_planner`, `wish_roadmap`) utilisent des IDs stables et ne sont **jamais écrasées** lors d'une synchronisation du catalogue.
+
+### 🗡️ Armes Signatures :
+- Lors de l'ajout de nouveaux personnages 5★ et de leurs armes signatures associées, enrichir le dictionnaire `SIGNATURE_WEAPONS` dans `client/src/api.js` afin qu'elles continuent d'apparaître en priorité 0 dans la sélection d'équipement.

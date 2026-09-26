@@ -240,7 +240,51 @@ describe('Genshin Dashboard - Tests du Domaine & SQLite', () => {
     assert.equal(getSignatureWeaponId({ id: 'avatar_999999', name: 'Inconnu' }), null);
     assert.equal(getSignatureWeaponId(null), null);
   });
+
+  it('devrait auto-détecter et synchroniser automatiquement les armes signatures pour les nouveaux personnages 5★', async () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS catalog_items (
+        id TEXT PRIMARY KEY,
+        category TEXT NOT NULL,
+        name TEXT NOT NULL,
+        element TEXT,
+        rarity INTEGER NOT NULL,
+        weapon_type TEXT,
+        icon TEXT NOT NULL,
+        data_json TEXT
+      );
+      CREATE TABLE IF NOT EXISTS character_signatures (
+        character_id INTEGER PRIMARY KEY,
+        weapon_id INTEGER NOT NULL,
+        source TEXT DEFAULT 'seed',
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 1. Simuler un nouveau personnage 5★ et une nouvelle arme 5★ dans catalog_items
+    db.prepare(`
+      INSERT OR REPLACE INTO catalog_items (id, category, name, element, rarity, weapon_type, icon, data_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('avatar_999001', 'character', 'Nouveau Perso 5★', 'Pyro', 5, 'WEAPON_POLE', 'icon_new_char', '{}');
+
+    db.prepare(`
+      INSERT OR REPLACE INTO catalog_items (id, category, name, element, rarity, weapon_type, icon, data_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('weapon_999001', 'weapon', 'Nouvelle Lance 5★', null, 5, 'WEAPON_POLE', 'icon_new_wep', '{}');
+
+    const { autoDetectSignatureWeapons } = await import('../scripts/sync-catalog.js');
+    const detected = autoDetectSignatureWeapons(db);
+
+    assert.equal(detected[999001], 999001);
+
+    // 2. Vérifier que c'est bien persisté dans SQLite
+    const saved = db.prepare('SELECT weapon_id, source FROM character_signatures WHERE character_id = ?').get(999001);
+    assert.ok(saved);
+    assert.equal(saved.weapon_id, 999001);
+    assert.equal(saved.source, 'auto_detected');
+  });
 });
+
 
 
 

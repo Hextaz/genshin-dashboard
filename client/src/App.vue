@@ -11,7 +11,8 @@ import {
   fetchTeams,
   fetchLoadouts,
   fetchOwnership,
-  updateOwnership
+  updateOwnership,
+  fetchSignatureWeapons
 } from './api.js';
 
 const currentView = ref('characters');
@@ -30,7 +31,8 @@ async function loadAllData() {
       fetchCatalog(),
       fetchTeams(),
       fetchLoadouts(),
-      fetchOwnership()
+      fetchOwnership(),
+      fetchSignatureWeapons()
     ]);
 
     characters.value = allCatalog.filter(i => i.category === 'character');

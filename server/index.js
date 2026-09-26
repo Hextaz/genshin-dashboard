@@ -88,6 +88,16 @@ app.get('/api/catalog/:id', (c) => {
   });
 });
 
+// Endpoint des armes signatures (chargé depuis SQLite)
+app.get('/api/signature_weapons', (c) => {
+  const rows = db.prepare('SELECT character_id, weapon_id FROM character_signatures').all();
+  const map = {};
+  for (const r of rows) {
+    map[r.character_id] = r.weapon_id;
+  }
+  return c.json(map);
+});
+
 // ==========================================
 // 2. LOADOUTS DE PERSONNAGES
 // ==========================================

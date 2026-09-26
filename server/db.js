@@ -107,11 +107,33 @@ db.exec(`
     icon TEXT,
     constellation_level INTEGER,
     priority_order INTEGER NOT NULL,
+    priority_tier TEXT DEFAULT 'S',  -- 'S', 'A', 'B'
     status TEXT DEFAULT 'active',    -- 'active', 'obtained', 'skipped'
     notes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
   CREATE INDEX IF NOT EXISTS idx_wish_order ON wish_roadmap(priority_order);
+
+  CREATE TABLE IF NOT EXISTS character_ownership (
+    character_id INTEGER PRIMARY KEY,
+    is_owned INTEGER DEFAULT 0,
+    constellation INTEGER DEFAULT 0,
+    notes TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS app_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
+
+// Migrations sécurisées pour bases existantes
+try {
+  db.exec("ALTER TABLE wish_roadmap ADD COLUMN priority_tier TEXT DEFAULT 'S'");
+} catch (e) {
+  // Colonne déjà présente
+}
 
 export default db;

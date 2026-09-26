@@ -1,36 +1,42 @@
 :root {
-  --font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+  --font-title: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
   
-  --bg-dark: #0a0d13;
-  --bg-surface: #121824;
-  --bg-surface-hover: #192233;
-  --bg-surface-active: #202b40;
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-accent: rgba(255, 255, 255, 0.15);
+  --bg-dark: #0B0D12;
+  --bg-sidebar: #0E1117;
+  --bg-surface: #12151C;
+  --bg-card: #0F1218;
+  --bg-surface-hover: #161A23;
+  --border-subtle: #1F2430;
+  --border-accent: #2A3040;
+  --border-active: #7CF0D0;
   
-  --text-main: #f1f5f9;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
+  --text-main: #E7E9EE;
+  --text-muted: #8F97AA;
+  --text-dim: #6E768A;
+  --accent-mint: #7CF0D0;
   
   /* Éléments Genshin */
-  --color-pyro: #ff5a36;
-  --color-hydro: #00c0ff;
-  --color-anemo: #33e6b8;
-  --color-electro: #b370ff;
-  --color-dendro: #7bd42b;
-  --color-cryo: #98d8ff;
-  --color-geo: #e6b033;
+  --color-pyro: #FF7A52;
+  --color-hydro: #4FB2FF;
+  --color-anemo: #4BE3B8;
+  --color-electro: #B98CFF;
+  --color-dendro: #A6E05A;
+  --color-cryo: #9FE6FF;
+  --color-geo: #F3C552;
   
-  --rarity-5: #e59b35;
-  --rarity-4: #a855f7;
+  --rarity-5: #F3C552;
+  --rarity-4: #B98CFF;
   
-  --tier-s: #ef4444;
-  --tier-a: #f59e0b;
-  --tier-b: #3b82f6;
+  --tier-s: #FF7A52;
+  --tier-a: #F3C552;
+  --tier-b: #4FB2FF;
   
-  --radius-sm: 6px;
-  --radius-md: 10px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
   --radius-lg: 16px;
+  --radius-xl: 20px;
 }
 
 * {
@@ -47,6 +53,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
+
 
 /* Scrollbar sobre */
 ::-webkit-scrollbar {

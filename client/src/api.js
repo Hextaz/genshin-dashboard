@@ -447,6 +447,48 @@ export async function deletePlannerItem(id) {
   return res.json();
 }
 
+// Calcul adaptatif et intelligent de la progression des objectifs
+export function calculatePlannerProgress(item) {
+  if (!item) return { done: 0, total: 1, pct: 0, completed: false };
+
+  if (item.target_type === 'weapon') {
+    const hasLevel = item.current_level < item.target_level;
+    const tasks = [];
+    if (hasLevel) {
+      tasks.push({ key: 'is_level_done', done: !!item.is_level_done });
+    }
+    tasks.push({ key: 'is_weapon_done', done: !!item.is_weapon_done });
+    const done = tasks.filter(t => t.done).length;
+    const total = tasks.length;
+    return { done, total, pct: Math.round((done / total) * 100), completed: done === total };
+  }
+
+  const hasLevel = item.current_level < item.target_level;
+  const hasTalents = (item.talent_normal_current || 1) < (item.talent_normal_target || 1) ||
+                     (item.talent_skill_current || 1) < (item.talent_skill_target || 1) ||
+                     (item.talent_burst_current || 1) < (item.talent_burst_target || 1);
+  const hasArtifacts = item.artifact_action && item.artifact_action !== 'none';
+
+  const tasks = [];
+  if (hasLevel) {
+    tasks.push({ key: 'is_level_done', done: !!item.is_level_done });
+  }
+  if (hasTalents) {
+    tasks.push({ key: 'is_talents_done', done: !!item.is_talents_done });
+  }
+  if (hasArtifacts) {
+    tasks.push({ key: 'is_artifacts_done', done: !!item.is_artifacts_done });
+  }
+
+  if (tasks.length === 0) {
+    return { done: 1, total: 1, pct: 100, completed: true };
+  }
+
+  const done = tasks.filter(t => t.done).length;
+  const total = tasks.length;
+  return { done, total, pct: Math.round((done / total) * 100), completed: done === total };
+}
+
 // Endgame
 export async function fetchEndgame(mode) {
   const res = await fetch(`${API_BASE}/endgame/${mode}`);

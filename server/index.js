@@ -256,9 +256,13 @@ app.post('/api/planner', async (c) => {
   const stmt = db.prepare(`
     INSERT INTO upgrade_planner (
       id, target_type, character_id, weapon_id, name, icon, tier,
-      current_level, target_level, talent_normal_target, talent_skill_target, talent_burst_target,
-      weapon_target_level, artifact_action, artifact_notes
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      current_level, target_level,
+      talent_normal_current, talent_normal_target,
+      talent_skill_current, talent_skill_target,
+      talent_burst_current, talent_burst_target,
+      weapon_target_level, artifact_action, artifact_notes,
+      is_level_done, is_talents_done, is_weapon_done, is_artifacts_done, is_completed
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(
     id,
@@ -270,12 +274,20 @@ app.post('/api/planner', async (c) => {
     body.tier || 'S',
     Number(body.current_level || 1),
     Number(body.target_level || 90),
+    Number(body.talent_normal_current || 1),
     Number(body.talent_normal_target || 1),
+    Number(body.talent_skill_current || 1),
     Number(body.talent_skill_target || 8),
+    Number(body.talent_burst_current || 1),
     Number(body.talent_burst_target || 8),
     Number(body.weapon_target_level || 90),
     body.artifact_action || 'none',
-    body.artifact_notes || ''
+    body.artifact_notes || '',
+    Number(body.is_level_done || 0),
+    Number(body.is_talents_done || 0),
+    Number(body.is_weapon_done || 0),
+    Number(body.is_artifacts_done || 0),
+    Number(body.is_completed || 0)
   );
   return c.json({ success: true, id }, 201);
 });
@@ -287,7 +299,7 @@ app.patch('/api/planner/:id', async (c) => {
   const fields = [];
   const values = [];
   for (const [key, val] of Object.entries(body)) {
-    if (['tier', 'current_level', 'target_level', 'talent_normal_target', 'talent_skill_target', 'talent_burst_target', 'weapon_target_level', 'artifact_action', 'artifact_notes', 'is_level_done', 'is_talents_done', 'is_weapon_done', 'is_artifacts_done', 'is_completed'].includes(key)) {
+    if (['tier', 'current_level', 'target_level', 'talent_normal_current', 'talent_normal_target', 'talent_skill_current', 'talent_skill_target', 'talent_burst_current', 'talent_burst_target', 'weapon_target_level', 'artifact_action', 'artifact_notes', 'is_level_done', 'is_talents_done', 'is_weapon_done', 'is_artifacts_done', 'is_completed'].includes(key)) {
       fields.push(`${key} = ?`);
       values.push(val);
     }

@@ -125,19 +125,72 @@ describe('Genshin Dashboard - Tests du Domaine & SQLite', () => {
     assert.equal(row.is_owned, 0);
   });
 
-  it('devrait calculer correctement la progression des checklists du planificateur', () => {
-    // Calcul de complétion : 3 sous-tâches pour un personnage
-    const item = {
+  it('devrait calculer intelligemment la progression adaptative du planificateur', async () => {
+    const { calculatePlannerProgress } = await import('../client/src/api.js');
+
+    // 1. Personnage complet (Niveau 1->90, Talents 1->10, Artéfacts à farm) -> 3 tâches
+    const fullChar = {
       target_type: 'character',
+      current_level: 1,
+      target_level: 90,
+      talent_normal_current: 1,
+      talent_normal_target: 6,
+      talent_skill_current: 1,
+      talent_skill_target: 9,
+      talent_burst_current: 1,
+      talent_burst_target: 10,
+      artifact_action: 'substat_farm',
       is_level_done: 1,
       is_talents_done: 1,
       is_artifacts_done: 0
     };
-    const done = item.is_level_done + item.is_talents_done + item.is_artifacts_done;
-    const total = 3;
-    const pct = Math.round((done / total) * 100);
-    assert.equal(done, 2);
-    assert.equal(pct, 67);
+    const resFull = calculatePlannerProgress(fullChar);
+    assert.equal(resFull.total, 3);
+    assert.equal(resFull.done, 2);
+    assert.equal(resFull.pct, 67);
+    assert.equal(resFull.completed, false);
+
+    // 2. Personnage avec Artéfacts seuls (Niveau déjà 90 et Talents déjà maxés) -> 1 seule tâche
+    const relicOnly = {
+      target_type: 'character',
+      current_level: 90,
+      target_level: 90,
+      talent_normal_current: 10,
+      talent_normal_target: 10,
+      talent_skill_current: 10,
+      talent_skill_target: 10,
+      talent_burst_current: 10,
+      talent_burst_target: 10,
+      artifact_action: 'substat_farm',
+      is_artifacts_done: 0
+    };
+    const resRelic = calculatePlannerProgress(relicOnly);
+    assert.equal(resRelic.total, 1);
+    assert.equal(resRelic.done, 0);
+    assert.equal(resRelic.completed, false);
+    relicOnly.is_artifacts_done = 1;
+    assert.equal(calculatePlannerProgress(relicOnly).pct, 100);
+    assert.equal(calculatePlannerProgress(relicOnly).completed, true);
+
+    // 3. Personnage avec Talents seuls (Niveau déjà 90 et aucune action artéfact) -> 1 seule tâche
+    const talentOnly = {
+      target_type: 'character',
+      current_level: 90,
+      target_level: 90,
+      talent_normal_current: 1,
+      talent_normal_target: 1,
+      talent_skill_current: 6,
+      talent_skill_target: 9,
+      talent_burst_current: 8,
+      talent_burst_target: 10,
+      artifact_action: 'none',
+      is_talents_done: 1
+    };
+    const resTalent = calculatePlannerProgress(talentOnly);
+    assert.equal(resTalent.total, 1);
+    assert.equal(resTalent.done, 1);
+    assert.equal(resTalent.pct, 100);
+    assert.equal(resTalent.completed, true);
   });
 
   it('devrait valider le réordonnancement de la roadmap de vœux', () => {
@@ -303,6 +356,47 @@ describe('Genshin Dashboard - Tests du Domaine & SQLite', () => {
     assert.equal(parseMainStats(null), null);
     assert.equal(parseMainStats(''), null);
     assert.equal(parseMainStats('invalid json'), null);
+  });
+
+  it('devrait persister les niveaux de talents actuels et cibles dans upgrade_planner', () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS upgrade_planner_full (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        tier TEXT DEFAULT 'S',
+        current_level INTEGER DEFAULT 1,
+        target_level INTEGER DEFAULT 90,
+        talent_normal_current INTEGER DEFAULT 1,
+        talent_normal_target INTEGER DEFAULT 1,
+        talent_skill_current INTEGER DEFAULT 1,
+        talent_skill_target INTEGER DEFAULT 1,
+        talent_burst_current INTEGER DEFAULT 1,
+        talent_burst_target INTEGER DEFAULT 1,
+        artifact_action TEXT DEFAULT 'none',
+        is_completed INTEGER DEFAULT 0
+      );
+    `);
+
+    const insert = db.prepare(`
+      INSERT INTO upgrade_planner_full (
+        id, name, current_level, target_level,
+        talent_normal_current, talent_normal_target,
+        talent_skill_current, talent_skill_target,
+        talent_burst_current, talent_burst_target,
+        artifact_action
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    insert.run('plan-alhaitham', 'Alhaitham', 80, 90, 1, 6, 8, 9, 8, 10, 'none');
+
+    const row = db.prepare('SELECT * FROM upgrade_planner_full WHERE id = ?').get('plan-alhaitham');
+    assert.equal(row.name, 'Alhaitham');
+    assert.equal(row.talent_normal_current, 1);
+    assert.equal(row.talent_normal_target, 6);
+    assert.equal(row.talent_skill_current, 8);
+    assert.equal(row.talent_skill_target, 9);
+    assert.equal(row.talent_burst_current, 8);
+    assert.equal(row.talent_burst_target, 10);
+    assert.equal(row.artifact_action, 'none');
   });
 });
 

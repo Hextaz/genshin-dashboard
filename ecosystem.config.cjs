@@ -5,6 +5,7 @@ module.exports = {
       script: 'server/index.js',
       instances: 1,
       autorestart: true,
+      time: true,
       watch: false,
       max_memory_restart: '50M',
       node_args: '--max-old-space-size=48 --optimize-for-size',

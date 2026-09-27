@@ -2,19 +2,24 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { cors } from 'hono/cors';
+import { bodyLimit } from 'hono/body-limit';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import db from './db.js';
-import { syncCatalog } from '../scripts/sync-catalog.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '../dist');
 const port = parseInt(process.env.PORT || '3002', 10);
+const host = process.env.HOST || '127.0.0.1';
 
 const app = new Hono();
 
 app.use('*', cors());
+app.use('/api/*', bodyLimit({
+  maxSize: 128 * 1024,
+  onError: (c) => c.json({ error: 'Payload trop volumineux (max 128 Ko)' }, 413)
+}));
 
 // Détection automatique et mise à jour transparente de l'API Yatta en arrière-plan
 async function checkAutoUpdate() {
@@ -37,15 +42,14 @@ async function checkAutoUpdate() {
     const count = db.prepare('SELECT COUNT(*) as c FROM catalog_items').get()?.c || 0;
     if (count === 0 || (remoteVh && remoteVh !== storedVh)) {
       console.log(`[Auto-Update] Nouvelle version Genshin détectée (remote: ${remoteVh}, locale: ${storedVh || 'none'}) -> Synchro en arrière-plan...`);
-      syncCatalog().catch(err => console.error('[Auto-Update Error]', err));
+      import('../scripts/sync-catalog.js')
+        .then(m => m.syncCatalog())
+        .catch(err => console.error('[Auto-Update Error]', err));
     }
   } catch (err) {
     console.warn('[Auto-Update Warning] Vérification Yatta impossible:', err.message);
   }
 }
-
-// Vérification initiale au démarrage
-checkAutoUpdate();
 
 // Endpoint de santé pour monitoring (Uptime Kuma)
 app.get('/api/health', (c) => {
@@ -121,8 +125,12 @@ function normalizeMainStats(val) {
 app.get('/api/loadouts', (c) => {
   const charId = c.req.query('character_id');
   if (charId) {
+    const numCharId = Number(charId);
+    if (!Number.isInteger(numCharId) || numCharId <= 0) {
+      return c.json({ error: 'Identifiant de personnage invalide' }, 400);
+    }
     const stmt = db.prepare('SELECT * FROM character_loadouts WHERE character_id = ? ORDER BY created_at DESC');
-    return c.json(stmt.all(Number(charId)));
+    return c.json(stmt.all(numCharId));
   }
   const stmt = db.prepare('SELECT * FROM character_loadouts ORDER BY character_name ASC, created_at DESC');
   return c.json(stmt.all());
@@ -130,6 +138,10 @@ app.get('/api/loadouts', (c) => {
 
 app.post('/api/loadouts', async (c) => {
   const body = await c.req.json();
+  const charId = Number(body.character_id);
+  if (!Number.isInteger(charId) || charId <= 0) {
+    return c.json({ error: 'Identifiant de personnage requis et valide' }, 400);
+  }
   const id = body.id || crypto.randomUUID();
   const stmt = db.prepare(`
     INSERT INTO character_loadouts (id, character_id, character_name, name, weapon_id, weapon_refinement, artifact_set_1_id, artifact_set_2_id, main_stats, notes)
@@ -137,7 +149,7 @@ app.post('/api/loadouts', async (c) => {
   `);
   stmt.run(
     id,
-    Number(body.character_id),
+    charId,
     body.character_name || '',
     body.name || 'Nouveau Build',
     body.weapon_id ? Number(body.weapon_id) : null,
@@ -158,7 +170,7 @@ app.put('/api/loadouts/:id', async (c) => {
     SET name = ?, weapon_id = ?, weapon_refinement = ?, artifact_set_1_id = ?, artifact_set_2_id = ?, main_stats = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `);
-  stmt.run(
+  const res = stmt.run(
     body.name,
     body.weapon_id ? Number(body.weapon_id) : null,
     Number(body.weapon_refinement || 1),
@@ -168,12 +180,27 @@ app.put('/api/loadouts/:id', async (c) => {
     body.notes || '',
     id
   );
+  if (res.changes === 0) {
+    return c.json({ error: 'Loadout non trouvé' }, 404);
+  }
   return c.json({ success: true });
 });
 
 app.delete('/api/loadouts/:id', (c) => {
   const id = c.req.param('id');
-  db.prepare('DELETE FROM character_loadouts WHERE id = ?').run(id);
+  const res = db.prepare('DELETE FROM character_loadouts WHERE id = ?').run(id);
+  if (res.changes === 0) {
+    return c.json({ error: 'Loadout non trouvé' }, 404);
+  }
+  // Nettoyage en cascade des références orphelines dans les équipes
+  db.prepare(`
+    UPDATE teams
+    SET slot1_loadout_id = CASE WHEN slot1_loadout_id = ? THEN NULL ELSE slot1_loadout_id END,
+        slot2_loadout_id = CASE WHEN slot2_loadout_id = ? THEN NULL ELSE slot2_loadout_id END,
+        slot3_loadout_id = CASE WHEN slot3_loadout_id = ? THEN NULL ELSE slot3_loadout_id END,
+        slot4_loadout_id = CASE WHEN slot4_loadout_id = ? THEN NULL ELSE slot4_loadout_id END
+    WHERE slot1_loadout_id = ? OR slot2_loadout_id = ? OR slot3_loadout_id = ? OR slot4_loadout_id = ?
+  `).run(id, id, id, id, id, id, id, id);
   return c.json({ success: true });
 });
 
@@ -308,13 +335,19 @@ app.patch('/api/planner/:id', async (c) => {
 
   values.push(id);
   const query = `UPDATE upgrade_planner SET ${fields.join(', ')} WHERE id = ?`;
-  db.prepare(query).run(...values);
+  const res = db.prepare(query).run(...values);
+  if (res.changes === 0) {
+    return c.json({ error: 'Objectif non trouvé' }, 404);
+  }
   return c.json({ success: true });
 });
 
 app.delete('/api/planner/:id', (c) => {
   const id = c.req.param('id');
-  db.prepare('DELETE FROM upgrade_planner WHERE id = ?').run(id);
+  const res = db.prepare('DELETE FROM upgrade_planner WHERE id = ?').run(id);
+  if (res.changes === 0) {
+    return c.json({ error: 'Objectif non trouvé' }, 404);
+  }
   return c.json({ success: true });
 });
 
@@ -350,6 +383,10 @@ app.get('/api/endgame/:mode', (c) => {
 
 app.post('/api/endgame/:mode', async (c) => {
   const mode = c.req.param('mode');
+  const allowedModes = ['abyss', 'carnage', 'abyss_meta'];
+  if (!allowedModes.includes(mode)) {
+    return c.json({ error: 'Mode endgame non autorisé' }, 400);
+  }
   const body = await c.req.json();
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO endgame_setups (id, mode, data_json, updated_at)
@@ -392,11 +429,19 @@ app.post('/api/wishlist', async (c) => {
 });
 
 app.put('/api/wishlist/reorder', async (c) => {
-  const { ids } = await c.req.json(); // Tableau ordonné d'IDs
+  const body = await c.req.json().catch(() => ({}));
+  const ids = body.ids;
   if (Array.isArray(ids)) {
-    const stmt = db.prepare('UPDATE wish_roadmap SET priority_order = ? WHERE id = ?');
-    for (let i = 0; i < ids.length; i++) {
-      stmt.run(i + 1, ids[i]);
+    db.exec('BEGIN TRANSACTION');
+    try {
+      const stmt = db.prepare('UPDATE wish_roadmap SET priority_order = ? WHERE id = ?');
+      for (let i = 0; i < ids.length; i++) {
+        stmt.run(i + 1, ids[i]);
+      }
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
     }
   }
   return c.json({ success: true });
@@ -415,14 +460,20 @@ app.patch('/api/wishlist/:id', async (c) => {
   }
   if (fields.length > 0) {
     values.push(id);
-    db.prepare(`UPDATE wish_roadmap SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    const res = db.prepare(`UPDATE wish_roadmap SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    if (res.changes === 0) {
+      return c.json({ error: 'Souhait non trouvé' }, 404);
+    }
   }
   return c.json({ success: true });
 });
 
 app.delete('/api/wishlist/:id', (c) => {
   const id = c.req.param('id');
-  db.prepare('DELETE FROM wish_roadmap WHERE id = ?').run(id);
+  const res = db.prepare('DELETE FROM wish_roadmap WHERE id = ?').run(id);
+  if (res.changes === 0) {
+    return c.json({ error: 'Souhait non trouvé' }, 404);
+  }
   return c.json({ success: true });
 });
 
@@ -440,6 +491,9 @@ app.get('/api/ownership', (c) => {
 
 app.post('/api/ownership/:id', async (c) => {
   const charId = Number(c.req.param('id'));
+  if (!Number.isInteger(charId) || charId <= 0) {
+    return c.json({ error: 'Identifiant de personnage invalide' }, 400);
+  }
   const body = await c.req.json().catch(() => ({}));
   const current = db.prepare('SELECT is_owned, constellation FROM character_ownership WHERE character_id = ?').get(charId);
   const newOwned = body.is_owned !== undefined ? (body.is_owned ? 1 : 0) : (current?.is_owned ? 0 : 1);
@@ -459,21 +513,34 @@ app.post('/api/ownership/:id', async (c) => {
 // ==========================================
 if (existsSync(distDir)) {
   app.use('/*', serveStatic({ root: './dist' }));
+  const indexPath = join(distDir, 'index.html');
+  const cachedIndexHtml = existsSync(indexPath) ? readFileSync(indexPath, 'utf8') : null;
   // Fallback SPA
   app.get('*', (c) => {
-    const htmlPath = join(distDir, 'index.html');
-    if (existsSync(htmlPath)) {
-      return c.html(readFileSync(htmlPath, 'utf8'));
+    if (cachedIndexHtml) {
+      return c.html(cachedIndexHtml);
     }
     return c.text('Build frontend non trouvé dans ./dist', 404);
   });
 }
 
-// Lancement du serveur
-console.log(`[Lordi Server] Démarrage sur le port ${port}...`);
-serve({
-  fetch: app.fetch,
-  port
-}, (info) => {
-  console.log(`✓ Serveur actif sur http://localhost:${info.port}`);
-});
+// Lancement du serveur (uniquement en exécution directe, pas lors des tests unitaires)
+const isMain = process.argv[1] && (
+  process.argv[1].endsWith('server/index.js') ||
+  process.argv[1] === fileURLToPath(import.meta.url)
+);
+
+if (isMain) {
+  checkAutoUpdate();
+  console.log(`[Lordi Server] Démarrage sur http://${host}:${port}...`);
+  serve({
+    fetch: app.fetch,
+    port,
+    hostname: host
+  }, (info) => {
+    console.log(`✓ Serveur actif sur http://${info.address}:${info.port}`);
+  });
+}
+
+export { app };
+export default app;

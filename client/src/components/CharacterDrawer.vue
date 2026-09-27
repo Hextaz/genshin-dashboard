@@ -14,7 +14,8 @@ import {
   createLoadout,
   updateLoadout,
   deleteLoadout,
-  getSignatureWeaponId
+  getSignatureWeaponId,
+  parseMainStats
 } from '../api.js';
 import WeaponPickerModal from './WeaponPickerModal.vue';
 import ArtifactPickerModal from './ArtifactPickerModal.vue';
@@ -110,10 +111,10 @@ function selectBuild(index) {
   const b = loadouts.value[index];
   if (!b) return;
 
-  let parsedStats = { sands: SANDS_STATS[0], goblet: GOBLET_STATS[0], circlet: CIRCLET_STATS[0] };
-  try {
-    if (b.main_stats) parsedStats = Object.assign(parsedStats, JSON.parse(b.main_stats));
-  } catch (e) {}
+  const parsed = parseMainStats(b.main_stats);
+  const parsedStats = parsed
+    ? { sands: parsed.sands || SANDS_STATS[0], goblet: parsed.goblet || GOBLET_STATS[0], circlet: parsed.circlet || CIRCLET_STATS[0] }
+    : { sands: SANDS_STATS[0], goblet: GOBLET_STATS[0], circlet: CIRCLET_STATS[0] };
 
   formData.value = {
     id: b.id,

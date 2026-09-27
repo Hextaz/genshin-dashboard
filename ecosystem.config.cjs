@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'genshin-dashboard',
       script: 'server/index.js',
-      instances: 1,
+      exec_mode: 'fork',
       autorestart: true,
       time: true,
       watch: false,
@@ -11,7 +11,8 @@ module.exports = {
       node_args: '--max-old-space-size=48 --optimize-for-size',
       env: {
         NODE_ENV: 'production',
-        PORT: 3002
+        PORT: 3002,
+        HOST: '0.0.0.0'
       }
     }
   ]

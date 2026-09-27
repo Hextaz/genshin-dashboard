@@ -11,7 +11,7 @@ import db from './db.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distDir = join(__dirname, '../dist');
 const port = parseInt(process.env.PORT || '3002', 10);
-const host = process.env.HOST || '127.0.0.1';
+const host = process.env.HOST || '0.0.0.0';
 
 const app = new Hono();
 
@@ -524,11 +524,14 @@ if (existsSync(distDir)) {
   });
 }
 
-// Lancement du serveur (uniquement en exécution directe, pas lors des tests unitaires)
-const isMain = process.argv[1] && (
-  process.argv[1].endsWith('server/index.js') ||
-  process.argv[1] === fileURLToPath(import.meta.url)
+// Lancement du serveur (uniquement en exécution directe ou sous PM2, pas lors des tests unitaires)
+const isTest = Boolean(
+  process.env.NODE_TEST_CONTEXT ||
+  process.env.NODE_ENV === 'test' ||
+  process.execArgv.includes('--test') ||
+  (process.argv[1] && process.argv[1].replace(/\\/g, '/').includes('test/'))
 );
+const isMain = !isTest;
 
 if (isMain) {
   checkAutoUpdate();

@@ -461,6 +461,53 @@ describe('Genshin Dashboard - Tests du Domaine & SQLite', () => {
     assert.equal(swords5.length, 1);
     assert.equal(swords5[0].name, 'Serment de la liberté');
   });
+
+  it('devrait persister et ajuster les niveaux de constellations (C0 à C6) pour chaque personnage', async () => {
+    const { calculateNextConstellation } = await import('../client/src/api.js');
+
+    // 1. Calculs des bornes strictes (0 à 6)
+    assert.equal(calculateNextConstellation(0, 1), 1);
+    assert.equal(calculateNextConstellation(5, 1), 6);
+    assert.equal(calculateNextConstellation(6, 1), 6); // Max 6
+    assert.equal(calculateNextConstellation(6, -1), 5);
+    assert.equal(calculateNextConstellation(1, -1), 0);
+    assert.equal(calculateNextConstellation(0, -1), 0); // Min 0
+
+    // 2. Persistance dans SQLite
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS character_ownership_test (
+        character_id INTEGER PRIMARY KEY,
+        is_owned INTEGER DEFAULT 0,
+        constellation INTEGER DEFAULT 0,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    const upsert = db.prepare(`
+      INSERT INTO character_ownership_test (character_id, is_owned, constellation, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(character_id) DO UPDATE SET
+        is_owned = excluded.is_owned,
+        constellation = excluded.constellation,
+        updated_at = CURRENT_TIMESTAMP
+    `);
+
+    // Alhaitham à C0
+    upsert.run(10000078, 1, 0);
+    let row = db.prepare('SELECT * FROM character_ownership_test WHERE character_id = ?').get(10000078);
+    assert.equal(row.is_owned, 1);
+    assert.equal(row.constellation, 0);
+
+    // Incrémenter à C1
+    upsert.run(10000078, 1, calculateNextConstellation(row.constellation, 1));
+    row = db.prepare('SELECT * FROM character_ownership_test WHERE character_id = ?').get(10000078);
+    assert.equal(row.constellation, 1);
+
+    // Incrémenter à C6
+    upsert.run(10000078, 1, 6);
+    row = db.prepare('SELECT * FROM character_ownership_test WHERE character_id = ?').get(10000078);
+    assert.equal(row.constellation, 6);
+  });
 });
 
 

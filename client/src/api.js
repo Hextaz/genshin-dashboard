@@ -631,3 +631,11 @@ export function filterWishWeapons(weapons, { query = '', weaponType = 'ALL', rar
     return (a.name || '').localeCompare(b.name || '', 'fr');
   });
 }
+
+// -------------------------------------------------------------
+// GESTION DES CONSTELLATIONS (C0 À C6)
+// -------------------------------------------------------------
+export function calculateNextConstellation(currentConstellation = 0, delta = 0) {
+  const current = Number(currentConstellation) || 0;
+  return Math.max(0, Math.min(6, current + delta));
+}

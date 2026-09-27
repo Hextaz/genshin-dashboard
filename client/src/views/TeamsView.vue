@@ -7,7 +7,6 @@ import {
   getElementIconUrl,
   WEAPON_LABELS,
   WEAPON_SVGS,
-  computeSynergies,
   createTeam,
   updateTeam,
   deleteTeam,
@@ -34,6 +33,10 @@ const props = defineProps({
   reliquaries: {
     type: Array,
     default: () => []
+  },
+  ownership: {
+    type: Object,
+    default: () => ({})
   }
 });
 
@@ -82,72 +85,7 @@ function getLoadoutsForCharacter(charId) {
   return props.loadouts.filter(l => l.character_id === Number(charId));
 }
 
-// 7 éléments pour le graphe heptagramme
-const EL_ORDER = ['Pyro', 'Hydro', 'Anemo', 'Electro', 'Dendro', 'Cryo', 'Geo'];
-const EL_POS = {
-  Pyro: { x: 80, y: 24, ix: 72, iy: 16 },
-  Hydro: { x: 124, y: 45, ix: 116, iy: 37 },
-  Electro: { x: 135, y: 94, ix: 127, iy: 86 },
-  Dendro: { x: 104, y: 132, ix: 96, iy: 124 },
-  Cryo: { x: 56, y: 132, ix: 48, iy: 124 },
-  Geo: { x: 25, y: 94, ix: 17, iy: 86 },
-  Anemo: { x: 36, y: 45, ix: 28, iy: 37 }
-};
 
-// Données de synergie complètes d'une équipe
-function getTeamSynergyData(teamSlots) {
-  const elements = teamSlots
-    .map(s => s?.character_id)
-    .filter(Boolean)
-    .map(id => {
-      const el = charactersMap.value[id]?.element;
-      return ELEMENT_LABELS[el] || el;
-    });
-
-  const syn = computeSynergies(elements);
-  const activeSet = new Set(elements);
-
-  // Lignes entre éléments actifs
-  const activeArr = Array.from(activeSet);
-  const lines = [];
-  for (let i = 0; i < activeArr.length; i++) {
-    for (let j = i + 1; j < activeArr.length; j++) {
-      const e1 = activeArr[i];
-      const e2 = activeArr[j];
-      if (EL_POS[e1] && EL_POS[e2]) {
-        lines.push({
-          x1: EL_POS[e1].x,
-          y1: EL_POS[e1].y,
-          x2: EL_POS[e2].x,
-          y2: EL_POS[e2].y,
-          color: ELEMENT_COLORS[e1] || '#7CF0D0'
-        });
-      }
-    }
-  }
-
-  const nodes = EL_ORDER.map(el => {
-    const pos = EL_POS[el];
-    const on = activeSet.has(el);
-    return {
-      name: el,
-      x: pos.x,
-      y: pos.y,
-      ix: pos.ix,
-      iy: pos.iy,
-      icon: getElementIconUrl(el),
-      active: on,
-      color: ELEMENT_COLORS[el]
-    };
-  });
-
-  return {
-    ...syn,
-    nodes,
-    lines,
-    headline: syn.reactions.map(r => r.name).slice(0, 3).join(' · ') || (elements.length ? 'Synergie équilibrée' : 'Équipe vide')
-  };
-}
 
 // -------------------------------------------------------------
 // MODALE DE SÉLECTION DU BUILD POUR UN PERSONNAGE D'UNE TEAM
@@ -236,10 +174,6 @@ function openEditTeamModal(team) {
   showEditModal.value = true;
 }
 
-const editorSynergies = computed(() => {
-  return getTeamSynergyData(editorForm.value.slots);
-});
-
 const editorFilteredCharacters = computed(() => {
   return props.characters.filter(c => {
     if (editorElementFilter.value !== 'ALL') {
@@ -322,7 +256,7 @@ async function deleteEditorTeam() {
       <div>
         <span class="sub-kicker">VUE 2 · COMPOSITIONS</span>
         <h2 class="view-main-title">Presets de Teams</h2>
-        <p class="view-main-desc">Vos équipes enregistrées, leurs armes, sets d'artéfacts et synergie élémentaire active.</p>
+        <p class="view-main-desc">Vos équipes enregistrées, leurs armes et sets d'artéfacts associés.</p>
       </div>
 
       <button type="button" class="btn-create-team" @click="openNewTeamModal">
@@ -340,23 +274,22 @@ async function deleteEditorTeam() {
         :key="team.id"
         class="team-card"
       >
-        <!-- Section Gauche : Infos Team + 4 Slots avec Avatars, Armes & Artéfacts -->
-        <div class="team-left-section">
-          <div class="team-title-row">
-            <div class="team-title-wrap">
-              <h3 class="team-name">{{ team.name }}</h3>
-              <span class="team-synergy-headline">
-                {{ getTeamSynergyData([1, 2, 3, 4].map(s => ({ character_id: team[`slot${s}_character_id`] }))).headline }}
-              </span>
-            </div>
-
-            <button type="button" class="btn-edit-team" @click="openEditTeamModal(team)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4" />
-              </svg>
-              Modifier
-            </button>
+        <div class="team-title-row">
+          <div class="team-title-wrap">
+            <h3 class="team-name">{{ team.name }}</h3>
+            <span class="team-meta-desc">
+              {{ [1, 2, 3, 4].filter(s => team[`slot${s}_character_id`]).length }}/4 personnages
+              <template v-if="team.description"> · {{ team.description }}</template>
+            </span>
           </div>
+
+          <button type="button" class="btn-edit-team" @click="openEditTeamModal(team)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4" />
+            </svg>
+            Modifier
+          </button>
+        </div>
 
           <!-- 4 Slots Personnages avec Équipements complets -->
           <div class="team-slots-grid">
@@ -389,9 +322,14 @@ async function deleteEditorTeam() {
                   </div>
                 </div>
 
-                <span class="slot-char-name">
-                  {{ charactersMap[team[`slot${s}_character_id`]].name }}
-                </span>
+                <div class="slot-name-row">
+                  <span class="slot-char-name">
+                    {{ charactersMap[team[`slot${s}_character_id`]].name }}
+                  </span>
+                  <span class="slot-constellation-badge">
+                    C{{ ownership[team[`slot${s}_character_id`]]?.constellation || 0 }}
+                  </span>
+                </div>
 
                 <!-- Vignettes d'équipements : Arme + Set d'artéfacts agrandis -->
                 <div class="slot-gear-preview" v-if="team[`slot${s}_loadout_id`] && loadoutsMap[team[`slot${s}_loadout_id`]]">
@@ -467,84 +405,6 @@ async function deleteEditorTeam() {
               </template>
             </div>
           </div>
-        </div>
-
-        <div class="section-divider"></div>
-
-        <!-- Section Droite : Roue de Synergies Heptagramme SVG -->
-        <div class="team-synergies-section">
-          <div class="synergy-wheel-area">
-            <svg width="140" height="140" viewBox="0 0 160 160" class="heptagram-svg">
-              <circle cx="80" cy="80" r="56" fill="none" stroke="#1F2430" stroke-width="1" />
-              <!-- Lignes reliant les éléments actifs -->
-              <line
-                v-for="(ln, idx) in getTeamSynergyData([1, 2, 3, 4].map(s => ({ character_id: team[`slot${s}_character_id`] }))).lines"
-                :key="idx"
-                :x1="ln.x1"
-                :y1="ln.y1"
-                :x2="ln.x2"
-                :y2="ln.y2"
-                :stroke="ln.color"
-                stroke-width="2"
-                stroke-opacity="0.8"
-                stroke-linecap="round"
-              />
-              <!-- 7 Nœuds des éléments -->
-              <g
-                v-for="nd in getTeamSynergyData([1, 2, 3, 4].map(s => ({ character_id: team[`slot${s}_character_id`] }))).nodes"
-                :key="nd.name"
-              >
-                <circle
-                  :cx="nd.x"
-                  :cy="nd.y"
-                  r="13"
-                  :fill="nd.active ? `${nd.color}30` : '#141821'"
-                  :stroke="nd.active ? nd.color : '#2A3040'"
-                  :stroke-width="nd.active ? '2.5' : '1.2'"
-                />
-                <image
-                  :x="nd.ix"
-                  :y="nd.iy"
-                  width="16"
-                  height="16"
-                  :href="nd.icon"
-                  :opacity="nd.active ? 1 : 0.4"
-                />
-              </g>
-            </svg>
-            <span class="synergies-sub-label">Synergies</span>
-          </div>
-
-          <!-- Badges des Résonances & Réactions Actives -->
-          <div class="synergies-badges-list">
-            <div
-              v-for="res in getTeamSynergyData([1, 2, 3, 4].map(s => ({ character_id: team[`slot${s}_character_id`] }))).resonances"
-              :key="res.name"
-              class="synergy-chip resonance-chip"
-              :style="{ borderColor: res.color, color: res.color, background: `${res.color}15` }"
-            >
-              <span class="chip-type">RÉSONANCE</span>
-              <span class="chip-name">{{ res.name }}</span>
-            </div>
-
-            <div
-              v-for="rx in getTeamSynergyData([1, 2, 3, 4].map(s => ({ character_id: team[`slot${s}_character_id`] }))).reactions"
-              :key="rx.name"
-              class="synergy-chip reaction-chip"
-              :style="{ borderColor: rx.color, color: rx.color, background: `${rx.color}12` }"
-            >
-              <span class="chip-type">RÉACTION</span>
-              <span class="chip-name">{{ rx.name }}</span>
-            </div>
-
-            <div
-              v-if="getTeamSynergyData([1, 2, 3, 4].map(s => ({ character_id: team[`slot${s}_character_id`] }))).resonances.length === 0 && getTeamSynergyData([1, 2, 3, 4].map(s => ({ character_id: team[`slot${s}_character_id`] }))).reactions.length === 0"
-              class="no-synergy-hint"
-            >
-              Complétez l'équipe pour activer résonances et réactions.
-            </div>
-          </div>
-        </div>
       </article>
 
       <div v-if="teams.length === 0" class="empty-teams-box">
@@ -686,9 +546,14 @@ async function deleteEditorTeam() {
                     class="avatar-img"
                   />
                 </div>
-                <span class="editor-slot-name">
-                  {{ charactersMap[editorForm.slots[s - 1].character_id].name }}
-                </span>
+                <div class="editor-slot-name-row">
+                  <span class="editor-slot-name">
+                    {{ charactersMap[editorForm.slots[s - 1].character_id].name }}
+                  </span>
+                  <span class="slot-constellation-badge">
+                    C{{ ownership[editorForm.slots[s - 1].character_id]?.constellation || 0 }}
+                  </span>
+                </div>
                 <button
                   type="button"
                   class="btn-remove-slot"
@@ -864,7 +729,8 @@ async function deleteEditorTeam() {
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   display: flex;
-  gap: 2rem;
+  flex-direction: column;
+  gap: 1.25rem;
   position: relative;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -872,14 +738,6 @@ async function deleteEditorTeam() {
 .team-card:hover {
   border-color: #2F3648;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
-}
-
-.team-left-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  min-width: 0;
 }
 
 .team-title-row {
@@ -901,12 +759,10 @@ async function deleteEditorTeam() {
   color: var(--text-main);
 }
 
-.team-synergy-headline {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--accent-mint);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.team-meta-desc {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
 .btn-edit-team {
@@ -999,6 +855,28 @@ async function deleteEditorTeam() {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+
+.slot-name-row,
+.editor-slot-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  max-width: 100%;
+}
+
+.slot-constellation-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #C29BFF;
+  background: rgba(194, 155, 255, 0.12);
+  border: 1px solid rgba(194, 155, 255, 0.35);
+  border-radius: 4px;
+  padding: 1px 4px;
+  line-height: 1.1;
+  flex-shrink: 0;
 }
 
 /* Vignettes d'équipements agrandies (44px) */
@@ -1152,67 +1030,6 @@ async function deleteEditorTeam() {
   color: var(--text-dim);
 }
 
-.section-divider {
-  width: 1px;
-  background: var(--border-subtle);
-}
-
-/* Section Synergies */
-.team-synergies-section {
-  width: 250px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.synergy-wheel-area {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-}
-
-.synergies-sub-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-dim);
-}
-
-.synergies-badges-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  width: 100%;
-}
-
-.synergy-chip {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.35rem 0.65rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid;
-  font-size: 0.75rem;
-}
-
-.chip-type {
-  font-size: 0.62rem;
-  font-weight: 800;
-  opacity: 0.8;
-}
-
-.chip-name {
-  font-weight: 700;
-}
-
-.no-synergy-hint {
-  font-size: 0.75rem;
-  color: var(--text-dim);
-  text-align: center;
-}
 
 /* ================= MODALE SÉLECTION DE BUILD ================= */
 .modal-backdrop {
@@ -1735,18 +1552,14 @@ async function deleteEditorTeam() {
 }
 
 @media (max-width: 900px) {
-  .team-card {
-    flex-direction: column;
-  }
-  .section-divider {
-    width: 100%;
-    height: 1px;
-  }
-  .team-synergies-section {
-    width: 100%;
-  }
   .team-slots-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 540px) {
+  .team-slots-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

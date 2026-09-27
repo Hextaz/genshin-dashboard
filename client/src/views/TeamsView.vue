@@ -34,6 +34,10 @@ const props = defineProps({
   reliquaries: {
     type: Array,
     default: () => []
+  },
+  ownership: {
+    type: Object,
+    default: () => ({})
   }
 });
 
@@ -389,9 +393,14 @@ async function deleteEditorTeam() {
                   </div>
                 </div>
 
-                <span class="slot-char-name">
-                  {{ charactersMap[team[`slot${s}_character_id`]].name }}
-                </span>
+                <div class="slot-name-row">
+                  <span class="slot-char-name">
+                    {{ charactersMap[team[`slot${s}_character_id`]].name }}
+                  </span>
+                  <span class="slot-constellation-badge">
+                    C{{ ownership[team[`slot${s}_character_id`]]?.constellation || 0 }}
+                  </span>
+                </div>
 
                 <!-- Vignettes d'équipements : Arme + Set d'artéfacts agrandis -->
                 <div class="slot-gear-preview" v-if="team[`slot${s}_loadout_id`] && loadoutsMap[team[`slot${s}_loadout_id`]]">
@@ -686,9 +695,14 @@ async function deleteEditorTeam() {
                     class="avatar-img"
                   />
                 </div>
-                <span class="editor-slot-name">
-                  {{ charactersMap[editorForm.slots[s - 1].character_id].name }}
-                </span>
+                <div class="editor-slot-name-row">
+                  <span class="editor-slot-name">
+                    {{ charactersMap[editorForm.slots[s - 1].character_id].name }}
+                  </span>
+                  <span class="slot-constellation-badge">
+                    C{{ ownership[editorForm.slots[s - 1].character_id]?.constellation || 0 }}
+                  </span>
+                </div>
                 <button
                   type="button"
                   class="btn-remove-slot"
@@ -999,6 +1013,28 @@ async function deleteEditorTeam() {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+
+.slot-name-row,
+.editor-slot-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  max-width: 100%;
+}
+
+.slot-constellation-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #C29BFF;
+  background: rgba(194, 155, 255, 0.12);
+  border: 1px solid rgba(194, 155, 255, 0.35);
+  border-radius: 4px;
+  padding: 1px 4px;
+  line-height: 1.1;
+  flex-shrink: 0;
 }
 
 /* Vignettes d'équipements agrandies (44px) */

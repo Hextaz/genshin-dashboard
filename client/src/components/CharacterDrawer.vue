@@ -35,6 +35,10 @@ const props = defineProps({
   isOwned: {
     type: Boolean,
     default: false
+  },
+  constellation: {
+    type: Number,
+    default: 0
   }
 });
 
@@ -245,6 +249,10 @@ async function handleDelete() {
               <span class="meta-sep">·</span>
               <span class="meta-rarity" :class="`rarity-${character.rarity}`">
                 {{ character.rarity }}★
+              </span>
+              <span class="meta-sep">·</span>
+              <span class="meta-constellation-badge">
+                C{{ constellation }}
               </span>
             </div>
           </div>
@@ -639,6 +647,18 @@ async function handleDelete() {
 .meta-rarity.rarity-4 {
   color: #B98CFF;
   font-weight: 700;
+}
+
+.meta-constellation-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #C29BFF;
+  background: rgba(194, 155, 255, 0.12);
+  border: 1px solid rgba(194, 155, 255, 0.35);
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 1.2;
 }
 
 .btn-close {

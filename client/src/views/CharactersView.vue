@@ -34,7 +34,19 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['refresh-loadouts', 'toggle-ownership']);
+const emit = defineEmits(['refresh-loadouts', 'toggle-ownership', 'update-constellation']);
+
+function getConstellation(charId) {
+  return props.ownership[charId]?.constellation || 0;
+}
+
+function handleConstellationChange(charId, delta) {
+  const current = getConstellation(charId);
+  const next = Math.max(0, Math.min(6, current + delta));
+  if (next !== current || delta > 0) {
+    emit('update-constellation', charId, next);
+  }
+}
 
 const searchQuery = ref('');
 const selectedElement = ref('ALL');
@@ -260,6 +272,38 @@ async function toggleCharacter(char) {
               >
                 {{ loadoutCountMap[Number(char.id.replace('avatar_', ''))] }} build{{ loadoutCountMap[Number(char.id.replace('avatar_', ''))] > 1 ? 's' : '' }}
               </span>
+
+              <!-- Incrémenteur / Décrémenteur de constellation en bas à droite -->
+              <div
+                class="constellation-stepper"
+                :class="{
+                  'is-owned': ownership[Number(char.id.replace('avatar_', ''))]?.is_owned,
+                  'has-constellation': (ownership[Number(char.id.replace('avatar_', ''))]?.constellation || 0) > 0
+                }"
+                @click.stop
+              >
+                <button
+                  type="button"
+                  class="cons-step-btn"
+                  title="Diminuer constellation (-)"
+                  :disabled="getConstellation(Number(char.id.replace('avatar_', ''))) <= 0"
+                  @click.stop="handleConstellationChange(Number(char.id.replace('avatar_', '')), -1)"
+                >
+                  −
+                </button>
+                <span class="cons-val-text">
+                  C{{ getConstellation(Number(char.id.replace('avatar_', ''))) }}
+                </span>
+                <button
+                  type="button"
+                  class="cons-step-btn"
+                  title="Augmenter constellation (+)"
+                  :disabled="getConstellation(Number(char.id.replace('avatar_', ''))) >= 6"
+                  @click.stop="handleConstellationChange(Number(char.id.replace('avatar_', '')), 1)"
+                >
+                  +
+                </button>
+              </div>
             </div>
 
             <!-- Fiche info sous la bannière -->
@@ -286,6 +330,7 @@ async function toggleCharacter(char) {
         :weapons="weapons"
         :reliquaries="reliquaries"
         :is-owned="Boolean(ownership[Number(activeCharacter.id.replace('avatar_', ''))]?.is_owned)"
+        :constellation="getConstellation(Number(activeCharacter.id.replace('avatar_', '')))"
         @close="activeCharacter = null"
         @loadouts-updated="$emit('refresh-loadouts')"
         @toggle-ownership="$emit('toggle-ownership', Number(activeCharacter.id.replace('avatar_', '')))"
@@ -607,6 +652,79 @@ async function toggleCharacter(char) {
   font-weight: 700;
   color: var(--accent-mint);
   z-index: 2;
+}
+
+/* Stepper de constellation en bas à droite */
+.constellation-stepper {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(11, 13, 18, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(4px);
+  border-radius: 5px;
+  padding: 1px 2px;
+  z-index: 2;
+  gap: 1px;
+  transition: all 0.2s ease;
+}
+
+.constellation-stepper.is-owned {
+  border-color: rgba(194, 155, 255, 0.4);
+}
+
+.constellation-stepper.has-constellation {
+  border-color: #C29BFF;
+  box-shadow: 0 0 8px rgba(194, 155, 255, 0.35);
+}
+
+.cons-step-btn {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+
+.cons-step-btn:hover:not(:disabled) {
+  background: rgba(194, 155, 255, 0.2);
+  color: #C29BFF;
+}
+
+.cons-step-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.cons-val-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 0 3px;
+  min-width: 18px;
+  text-align: center;
+  user-select: none;
+}
+
+.constellation-stepper.is-owned .cons-val-text {
+  color: #E7E9EE;
+}
+
+.constellation-stepper.has-constellation .cons-val-text {
+  color: #C29BFF;
 }
 
 /* Fiche info texte */

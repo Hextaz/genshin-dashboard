@@ -572,9 +572,14 @@ const filteredRoster = computed(() => {
                   </div>
                 </div>
 
-                <span class="slot-name-text">
-                  {{ charactersMap[slot.character_id].name }}
-                </span>
+                <div class="slot-name-row">
+                  <span class="slot-name-text">
+                    {{ charactersMap[slot.character_id].name }}
+                  </span>
+                  <span class="slot-constellation-badge">
+                    C{{ ownership[slot.character_id]?.constellation || 0 }}
+                  </span>
+                </div>
 
                 <!-- Avertissement de doublon visuel -->
                 <span
@@ -793,7 +798,15 @@ const filteredRoster = computed(() => {
               <img :src="getElementIconUrl(char.element)" class="char-mini-el" />
             </div>
 
-            <span class="roster-name">{{ char.name }}</span>
+            <div class="roster-name-row">
+              <span class="roster-name">{{ char.name }}</span>
+              <span
+                v-if="ownership[Number(char.id.replace('avatar_', ''))]?.is_owned"
+                class="roster-constellation-badge"
+              >
+                C{{ ownership[Number(char.id.replace('avatar_', ''))]?.constellation || 0 }}
+              </span>
+            </div>
 
             <!-- Badge d'assignation ou de blocage -->
             <span
@@ -1343,6 +1356,14 @@ const filteredRoster = computed(() => {
   object-position: top center;
 }
 
+.slot-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  max-width: 100%;
+}
+
 .slot-name-text {
   font-size: 0.78rem;
   font-weight: 700;
@@ -1351,6 +1372,19 @@ const filteredRoster = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+
+.slot-constellation-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #C29BFF;
+  background: rgba(194, 155, 255, 0.12);
+  border: 1px solid rgba(194, 155, 255, 0.35);
+  border-radius: 4px;
+  padding: 1px 4px;
+  line-height: 1.1;
+  flex-shrink: 0;
 }
 
 .duplicate-warn-tag {
@@ -1767,6 +1801,14 @@ const filteredRoster = computed(() => {
   padding: 1px;
 }
 
+.roster-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  max-width: 95px;
+}
+
 .roster-name {
   font-size: 0.78rem;
   font-weight: 600;
@@ -1774,8 +1816,20 @@ const filteredRoster = computed(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 95px;
   text-align: center;
+}
+
+.roster-constellation-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #C29BFF;
+  background: rgba(194, 155, 255, 0.12);
+  border: 1px solid rgba(194, 155, 255, 0.35);
+  border-radius: 3px;
+  padding: 0 3px;
+  line-height: 1.1;
+  flex-shrink: 0;
 }
 
 .empty-roster-hint {

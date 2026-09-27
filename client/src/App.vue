@@ -71,6 +71,24 @@ async function toggleOwnership(charId) {
   }
 }
 
+async function updateConstellation(charId, constellationLevel) {
+  const current = ownership.value[charId] || {};
+  const nextLevel = Math.max(0, Math.min(6, constellationLevel));
+  // Si on passe une constellation > 0, on marque automatiquement le personnage comme possédé
+  const isOwned = nextLevel > 0 ? 1 : (current.is_owned ? 1 : 0);
+
+  ownership.value = {
+    ...ownership.value,
+    [charId]: { ...current, is_owned: isOwned, constellation: nextLevel }
+  };
+
+  try {
+    await updateOwnership(charId, { is_owned: isOwned, constellation: nextLevel });
+  } catch (err) {
+    console.error('Erreur mise à jour constellation:', err);
+  }
+}
+
 onMounted(() => {
   loadAllData();
 });
@@ -101,6 +119,7 @@ onMounted(() => {
           :ownership="ownership"
           @refresh-loadouts="refreshLoadouts"
           @toggle-ownership="toggleOwnership"
+          @update-constellation="updateConstellation"
         />
 
         <!-- Vue 2: Presets d'Équipes -->
@@ -111,6 +130,7 @@ onMounted(() => {
           :loadouts="loadouts"
           :weapons="weapons"
           :reliquaries="reliquaries"
+          :ownership="ownership"
           @refresh-teams="refreshTeams"
         />
 

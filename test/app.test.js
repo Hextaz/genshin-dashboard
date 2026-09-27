@@ -508,8 +508,102 @@ describe('Genshin Dashboard - Tests du Domaine & SQLite', () => {
     row = db.prepare('SELECT * FROM character_ownership_test WHERE character_id = ?').get(10000078);
     assert.equal(row.constellation, 6);
   });
+
+  it('devrait valider les endpoints REST Hono, la sécurité des entrées et les codes HTTP', async () => {
+    const { default: app } = await import('../server/index.js');
+
+    // 1. Health check
+    const resHealth = await app.request('/api/health');
+    assert.equal(resHealth.status, 200);
+    const healthJson = await resHealth.json();
+    assert.equal(healthJson.status, 'ok');
+    assert.ok(typeof healthJson.memory.rss_mb === 'number');
+    assert.ok(typeof healthJson.memory.heap_used_mb === 'number');
+
+    // 2. Rejet des identifiants invalides (NaN / chaîne non numérique)
+    const resBadOwnership = await app.request('/api/ownership/not_a_number', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_owned: 1 })
+    });
+    assert.equal(resBadOwnership.status, 400);
+    const badOwnershipJson = await resBadOwnership.json();
+    assert.ok(badOwnershipJson.error);
+
+    // 3. Rejet des modes endgame non autorisés
+    const resBadEndgame = await app.request('/api/endgame/malicious_mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hack: true })
+    });
+    assert.equal(resBadEndgame.status, 400);
+
+    // 4. Rejet 404 sur suppression d'un loadout inexistant
+    const resDeleteNotFound = await app.request('/api/loadouts/non_existent_loadout_id', {
+      method: 'DELETE'
+    });
+    assert.equal(resDeleteNotFound.status, 404);
+
+    // 5. Rejet 413 Payload Too Large si le corps dépasse 128 Ko
+    const hugePayload = 'A'.repeat(130 * 1024);
+    const resHuge = await app.request('/api/loadouts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: hugePayload })
+    });
+    assert.equal(resHuge.status, 413);
+
+    // 6. Rejet 400 sur création de loadout sans character_id valide
+    const resNoCharId = await app.request('/api/loadouts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Build Invalide' })
+    });
+    assert.equal(resNoCharId.status, 400);
+
+    // 7. Nettoyage en cascade dans teams lors de la suppression d'un loadout
+    const resCreateLoadout = await app.request('/api/loadouts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character_id: 10000089, name: 'Furina SubDPS' })
+    });
+    assert.equal(resCreateLoadout.status, 201);
+    const { id: createdLoadoutId } = await resCreateLoadout.json();
+
+    const resCreateTeam = await app.request('/api/teams', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Team Furina Test',
+        slot1_character_id: 10000089,
+        slot1_loadout_id: createdLoadoutId
+      })
+    });
+    assert.equal(resCreateTeam.status, 201);
+    const { id: createdTeamId } = await resCreateTeam.json();
+
+    // Suppression du loadout -> doit réussir et détacher le slot dans teams
+    const resDeleteLoadout = await app.request(`/api/loadouts/${createdLoadoutId}`, { method: 'DELETE' });
+    assert.equal(resDeleteLoadout.status, 200);
+
+    const { default: dbInstance } = await import('../server/db.js');
+    const teamAfter = dbInstance.prepare('SELECT slot1_loadout_id FROM teams WHERE id = ?').get(createdTeamId);
+    assert.equal(teamAfter.slot1_loadout_id, null, 'Le slot1_loadout_id doit être remis à null en cascade');
+
+    // Nettoyage de l'équipe de test
+    await app.request(`/api/teams/${createdTeamId}`, { method: 'DELETE' });
+
+    // 8. Rejet 404 sur mise à jour ou suppression d'un objectif de planificateur inexistant
+    const resPatchPlanner404 = await app.request('/api/planner/non_existent_plan_id', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tier: 'A' })
+    });
+    assert.equal(resPatchPlanner404.status, 404);
+
+    const resDeletePlanner404 = await app.request('/api/planner/non_existent_plan_id', {
+      method: 'DELETE'
+    });
+    assert.equal(resDeletePlanner404.status, 404);
+  });
 });
-
-
-
-

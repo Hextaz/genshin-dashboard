@@ -139,23 +139,18 @@ db.exec(`
   );
 `);
 
-// Migrations sécurisées pour bases existantes
-try {
-  db.exec("ALTER TABLE wish_roadmap ADD COLUMN priority_tier TEXT DEFAULT 'S'");
-} catch (e) {
-  // Colonne déjà présente
+// Migrations sécurisées pour bases existantes (inspection sans try/catch aveugles)
+function addColumnIfNotExists(table, column, definition) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+  const exists = columns.some(col => col.name === column);
+  if (!exists) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }
 
-try {
-  db.exec("ALTER TABLE upgrade_planner ADD COLUMN talent_normal_current INTEGER DEFAULT 1");
-} catch (e) {}
-
-try {
-  db.exec("ALTER TABLE upgrade_planner ADD COLUMN talent_skill_current INTEGER DEFAULT 1");
-} catch (e) {}
-
-try {
-  db.exec("ALTER TABLE upgrade_planner ADD COLUMN talent_burst_current INTEGER DEFAULT 1");
-} catch (e) {}
+addColumnIfNotExists('wish_roadmap', 'priority_tier', "TEXT DEFAULT 'S'");
+addColumnIfNotExists('upgrade_planner', 'talent_normal_current', "INTEGER DEFAULT 1");
+addColumnIfNotExists('upgrade_planner', 'talent_skill_current', "INTEGER DEFAULT 1");
+addColumnIfNotExists('upgrade_planner', 'talent_burst_current', "INTEGER DEFAULT 1");
 
 export default db;
